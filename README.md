@@ -24,14 +24,30 @@ Extensions cover everything from UI polish (custom footer, tool pills, leader-ke
 ## Install
 
 ```bash
-pi install github:tomsej/pi-ext
+pi install git:github.com/tomsej/pi-ext
 ```
 
-Or install individual extensions:
+Or using the full URL:
 
 ```bash
-pi install github:tomsej/pi-ext/extensions/leader-key
+pi install https://github.com/tomsej/pi-ext
 ```
+
+To install the full package but only load specific extensions or skills, use package filtering in your `settings.json`:
+
+```json
+{
+  "packages": [
+    {
+      "source": "git:github.com/tomsej/pi-ext",
+      "extensions": ["extensions/leader-key"],
+      "skills": []
+    }
+  ]
+}
+```
+
+See [Pi Packages docs](https://github.com/badlogic/pi/blob/main/docs/packages.md) for more filtering options.
 
 Requires [Pi](https://github.com/badlogic/pi) v0.37.3+.
 
