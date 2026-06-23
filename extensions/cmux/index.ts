@@ -5,8 +5,8 @@
  * Phase 2: Sidebar status pills (model, state, thinking, tokens).
  * Phase 3: Custom tools for the LLM (browser, workspace, notify).
  *
- * Gracefully degrades: if not running inside cmux, the extension
- * is a silent no-op.
+ * Gracefully degrades: if not running inside cmux, cmux-only features
+ * are a silent no-op. /split-fork still works in tmux.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -19,7 +19,10 @@ import { wireSplitFork } from "./split-fork.js";
 export default function (pi: ExtensionAPI) {
   const client = new CmuxClient();
 
-  // Skip everything if cmux is not available
+  // Wire /split-fork command — works with tmux or cmux
+  wireSplitFork(pi, client);
+
+  // Skip cmux-specific features if cmux is not available
   if (!client.available) return;
 
   pi.on("session_start", async (_event, ctx) => {
@@ -35,9 +38,6 @@ export default function (pi: ExtensionAPI) {
 
   // Wire custom tools (browser, workspace, notify)
   wireTools(pi, client);
-
-  // Wire /split-fork command
-  wireSplitFork(pi, client);
 
   // Clean up on shutdown
   pi.on("session_shutdown", async () => {

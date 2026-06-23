@@ -1,8 +1,13 @@
 /**
- * /split-fork — Fork this session into a new pi process in a cmux split.
+ * /split-fork — Fork this session into a new pi process in a split or tab.
  *
- * Inspired by mitsuhiko's Ghostty split-fork extension.
- * Uses the cmux socket API instead of AppleScript, so it works on any platform.
+ * Works with herder, tmux, or cmux. Detects which multiplexer is active automatically.
+ *
+ * Usage:
+ *   /split-fork                    → horizontal split
+ *   /split-fork --tab              → new tab/window
+ *   /split-fork optional prompt    → split with prompt
+ *   /split-fork --tab prompt here  → tab with prompt
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
@@ -10,6 +15,7 @@ import { existsSync, promises as fs } from "node:fs";
 import * as path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { CmuxClient } from "./cmux-client.js";
+import { detectMultiplexer, createSplit, createTab, sendKeys, getMultiplexerName } from "../shared/multiplexer.js";
 
 function shellQuote(value: string): string {
 	if (value.length === 0) return "''";
@@ -76,57 +82,58 @@ async function createForkedSession(ctx: ExtensionCommandContext): Promise<string
 	return newSessionFile;
 }
 
+function parseArgs(raw: string): { useTab: boolean; prompt: string } {
+	const trimmed = raw.trim();
+	if (trimmed.startsWith("--tab ")) {
+		return { useTab: true, prompt: trimmed.slice(6).trim() };
+	}
+	if (trimmed === "--tab") {
+		return { useTab: true, prompt: "" };
+	}
+	return { useTab: false, prompt: trimmed };
+}
+
 export function wireSplitFork(pi: ExtensionAPI, client: CmuxClient): void {
 	pi.registerCommand("split-fork", {
-		description: "Fork this session into a new pi process in a cmux split pane. Usage: /split-fork [optional prompt]",
+		description: "Fork this session into a new pi process in a split or tab (tmux/cmux). Usage: /split-fork [--tab] [optional prompt]",
 		handler: async (args, ctx) => {
-			if (!client.isConnected()) {
-				const ok = await client.connect();
-				if (!ok) {
-					ctx.ui.notify("cmux is not connected.", "warning");
-					return;
-				}
-			}
-
+			const { useTab, prompt } = parseArgs(args);
 			const wasBusy = !ctx.isIdle();
-			const prompt = args.trim();
 
 			// 1. Fork the session
 			const forkedSessionFile = await createForkedSession(ctx);
 
-			// 2. Split current surface to the right
-			const splitResult = await client.request("surface.split", { direction: "right" });
-			if (!splitResult || splitResult.error) {
-				const reason = splitResult?.error ?? "unknown cmux error";
-				ctx.ui.notify(`Failed to create cmux split: ${reason}`, "error");
+			// 2. Detect multiplexer and create split or tab
+			const mux = detectMultiplexer();
+			if (!mux) {
+				ctx.ui.notify("No supported multiplexer detected (herder, tmux, or cmux).", "warning");
 				if (forkedSessionFile) {
 					ctx.ui.notify(`Forked session was created: ${forkedSessionFile}`, "info");
 				}
 				return;
 			}
 
-			// 3. Get the new surface ID from the split result
-			const newSurfaceId = splitResult.new_surface_id ?? splitResult.surface_id;
-			if (!newSurfaceId) {
-				ctx.ui.notify("Split succeeded but no surface ID returned.", "error");
+			const target = useTab ? createTab("fork") : createSplit("right");
+			if (!target) {
+				ctx.ui.notify(`Failed to create ${useTab ? "tab" : "split"} in ${mux}.`, "error");
+				if (forkedSessionFile) {
+					ctx.ui.notify(`Forked session was created: ${forkedSessionFile}`, "info");
+				}
 				return;
 			}
 
-			// 4. Small delay to let the new shell initialize
+			// 3. Small delay to let the new shell initialize
 			await new Promise((r) => setTimeout(r, 500));
 
-			// 5. Send the pi command to the new split
-			const command = buildPiCommand(forkedSessionFile, prompt) + "\n";
-			await client.request("surface.send_text", {
-				surface_id: newSurfaceId,
-				text: command,
-			});
+			// 4. Send the pi command to the new pane/surface
+			const command = buildPiCommand(forkedSessionFile, prompt);
+			sendKeys(target, command);
 
-			// 6. Notify the user
+			// 5. Notify the user
 			if (forkedSessionFile) {
 				const fileName = path.basename(forkedSessionFile);
 				const suffix = prompt ? " and sent prompt" : "";
-				ctx.ui.notify(`Forked to ${fileName} in a new cmux split${suffix}.`, "info");
+				ctx.ui.notify(`Forked to ${fileName} in a new ${getMultiplexerName()} ${target.type}${suffix}.`, "info");
 				if (wasBusy) {
 					ctx.ui.notify(
 						"Forked from current committed state (in-flight turn continues in original session).",
@@ -134,7 +141,7 @@ export function wireSplitFork(pi: ExtensionAPI, client: CmuxClient): void {
 					);
 				}
 			} else {
-				ctx.ui.notify("Opened a new cmux split (no persisted session to fork).", "warning");
+				ctx.ui.notify(`Opened a new ${getMultiplexerName()} ${target.type} (no persisted session to fork).`, "warning");
 			}
 		},
 	});

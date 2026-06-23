@@ -9,6 +9,7 @@ export interface ActionItem {
 	label: string;
 	description?: string;
 	action: (ctx: ExtensionContext) => void | Promise<void>;
+	shiftAction?: (ctx: ExtensionContext) => void | Promise<void>;
 }
 
 export interface ActionGroup {
@@ -20,4 +21,4 @@ export interface ActionGroup {
 /** Top-level entry: either a group (chord → submenu) or a direct action */
 export type TopLevelEntry =
 	| { type: "group"; group: ActionGroup }
-	| { type: "action"; key: string; label: string; description?: string; action: (ctx: ExtensionContext) => void | Promise<void> };
+	| { type: "action"; key: string; label: string; description?: string; action: (ctx: ExtensionContext) => void | Promise<void>; shiftAction?: (ctx: ExtensionContext) => void | Promise<void>; expandableItems?: ActionItem[] };

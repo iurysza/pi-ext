@@ -101,6 +101,12 @@ function buildEntries(pi: ExtensionAPI, ctx: ExtensionContext): TopLevelEntry[] 
 	const customCommands = extCommands.filter((c) => !builtinCommandNames.has(c.name));
 
 	if (customCommands.length > 0) {
+		const extItems = customCommands.map((cmd) => ({
+			key: cmd.name[0],
+			label: cmd.name,
+			description: cmd.description || "extension",
+			action: (ctx: ExtensionContext) => pi.sendUserMessage(`/${cmd.name}`),
+		}));
 		entries.push({
 			type: "action",
 			key: "e",
@@ -123,6 +129,7 @@ function buildEntries(pi: ExtensionAPI, ctx: ExtensionContext): TopLevelEntry[] 
 					pi.sendUserMessage(`/${selected}`);
 				}
 			},
+			expandableItems: extItems,
 		});
 	}
 
@@ -130,6 +137,15 @@ function buildEntries(pi: ExtensionAPI, ctx: ExtensionContext): TopLevelEntry[] 
 	const skillCommands = commands.filter((c) => c.source === "skill");
 
 	if (skillCommands.length > 0) {
+		const skItems = skillCommands.map((cmd) => ({
+			key: cmd.name[0],
+			label: cmd.name,
+			description: cmd.description || "skill",
+			action: (ctx: ExtensionContext) => {
+				ctx.ui.setEditorText(`/${cmd.name} `);
+				ctx.ui.notify(`Type your prompt after /${cmd.name}`, "info");
+			},
+		}));
 		entries.push({
 			type: "action",
 			key: "k",
@@ -153,6 +169,7 @@ function buildEntries(pi: ExtensionAPI, ctx: ExtensionContext): TopLevelEntry[] 
 					ctx.ui.notify(`Type your prompt after /${selected}`, "info");
 				}
 			},
+			expandableItems: skItems,
 		});
 	}
 
@@ -235,12 +252,41 @@ function buildEntries(pi: ExtensionAPI, ctx: ExtensionContext): TopLevelEntry[] 
 
 type View = { type: "root" } | { type: "group"; group: ActionGroup };
 
+const MAX_EXPANDED_VISIBLE = 12;
+
+function parsePaletteKey(data: string): { key: string; shifted: boolean } | null {
+	const parsed = parseKey(data);
+	if (parsed) {
+		const parts = parsed.split("+");
+		const rawKey = parts[parts.length - 1];
+		const key = rawKey.toLowerCase();
+		const modifiers = parts.slice(0, -1).map((p) => p.toLowerCase());
+		const plain = modifiers.length === 0;
+		const shifted = modifiers.length === 1 && modifiers[0] === "shift" || (plain && rawKey >= "A" && rawKey <= "Z");
+		if ((plain || shifted) && key.length === 1 && key >= "a" && key <= "z") {
+			return { key, shifted };
+		}
+	}
+
+	// Legacy terminals may send Shift+letter as an uppercase printable char.
+	if (data.length === 1 && data >= "A" && data <= "Z") {
+		return { key: data.toLowerCase(), shifted: true };
+	}
+	if (data.length === 1 && data >= "a" && data <= "z") {
+		return { key: data, shifted: false };
+	}
+	return null;
+}
+
 class LeaderKeyOverlay {
 	private view: View = { type: "root" };
 	private entries: TopLevelEntry[];
 	private theme: Theme;
 	private done: (result: ActionItem | null) => void;
 	private highlightedIndex = 0;
+	private expandedEntryIndex: number | null = null;
+	private expandedHighlightIndex = 0;
+	private scrollOffset = 0;
 
 	constructor(
 		entries: TopLevelEntry[],
@@ -253,6 +299,12 @@ class LeaderKeyOverlay {
 	}
 
 	private get currentItems(): Array<{ key: string; label: string; description?: string }> {
+		if (this.expandedEntryIndex !== null) {
+			const entry = this.entries[this.expandedEntryIndex];
+			if (entry?.type === "action" && entry.expandableItems) {
+				return entry.expandableItems;
+			}
+		}
 		if (this.view.type === "root") {
 			return this.entries.map((e) => {
 				if (e.type === "group") {
@@ -272,8 +324,39 @@ class LeaderKeyOverlay {
 		return this.view.group.items;
 	}
 
+	private get isExpanded(): boolean {
+		return this.expandedEntryIndex !== null;
+	}
+
+	private expandCurrent(): void {
+		if (this.view.type !== "root") return;
+		const entry = this.entries[this.highlightedIndex];
+		if (entry?.type === "action" && entry.expandableItems && entry.expandableItems.length > 0) {
+			this.expandedEntryIndex = this.highlightedIndex;
+			this.expandedHighlightIndex = 0;
+			this.scrollOffset = 0;
+		}
+	}
+
+	private collapseExpanded(): void {
+		this.expandedEntryIndex = null;
+		this.expandedHighlightIndex = 0;
+		this.scrollOffset = 0;
+	}
+
+	private resolveAction(action: ActionItem, shifted: boolean): ActionItem {
+		if (shifted && action.shiftAction) {
+			return { ...action, action: action.shiftAction };
+		}
+		return action;
+	}
+
 	handleInput(data: string): void {
 		if (matchesKey(data, "escape") || matchesKey(data, Key.ctrl("c"))) {
+			if (this.isExpanded) {
+				this.collapseExpanded();
+				return;
+			}
 			if (this.view.type === "group") {
 				this.view = { type: "root" };
 				this.highlightedIndex = 0;
@@ -284,6 +367,10 @@ class LeaderKeyOverlay {
 		}
 
 		if (matchesKey(data, "backspace")) {
+			if (this.isExpanded) {
+				this.collapseExpanded();
+				return;
+			}
 			if (this.view.type === "group") {
 				this.view = { type: "root" };
 				this.highlightedIndex = 0;
@@ -293,19 +380,49 @@ class LeaderKeyOverlay {
 			return;
 		}
 
+		// Tab: toggle expand/collapse for expandable items
+		if (matchesKey(data, "tab")) {
+			if (this.isExpanded) {
+				this.collapseExpanded();
+			} else if (this.view.type === "root") {
+				this.expandCurrent();
+			}
+			return;
+		}
+
 		// Arrow keys for highlighting
 		if (matchesKey(data, "up")) {
-			this.highlightedIndex = Math.max(0, this.highlightedIndex - 1);
+			if (this.isExpanded) {
+				this.expandedHighlightIndex = Math.max(0, this.expandedHighlightIndex - 1);
+				this.ensureExpandedVisible();
+			} else {
+				this.highlightedIndex = Math.max(0, this.highlightedIndex - 1);
+			}
 			return;
 		}
 		if (matchesKey(data, "down")) {
 			const items = this.currentItems;
-			this.highlightedIndex = Math.min(items.length - 1, this.highlightedIndex + 1);
+			if (this.isExpanded) {
+				this.expandedHighlightIndex = Math.min(items.length - 1, this.expandedHighlightIndex + 1);
+				this.ensureExpandedVisible();
+			} else {
+				this.highlightedIndex = Math.min(items.length - 1, this.highlightedIndex + 1);
+			}
 			return;
 		}
 
 		// Enter to select highlighted item
 		if (matchesKey(data, "enter") || matchesKey(data, "return")) {
+			if (this.isExpanded) {
+				const entry = this.entries[this.expandedEntryIndex!];
+				if (entry?.type === "action" && entry.expandableItems) {
+					const action = entry.expandableItems[this.expandedHighlightIndex];
+					if (action) {
+						this.done(action);
+					}
+				}
+				return;
+			}
 			const items = this.currentItems;
 			if (this.highlightedIndex >= 0 && this.highlightedIndex < items.length) {
 				const item = items[this.highlightedIndex];
@@ -321,35 +438,44 @@ class LeaderKeyOverlay {
 			return;
 		}
 
-		// Direct key press — use parseKey to handle both raw chars and Kitty protocol sequences
-		const parsed = parseKey(data);
-		if (parsed && parsed.length === 1 && parsed >= "a" && parsed <= "z") {
-			const key = parsed.toLowerCase();
+		// Direct key press — Shift+letter runs the tab/window variant when available
+		const parsed = parsePaletteKey(data);
+		if (parsed) {
+			const { key, shifted } = parsed;
 
-			if (this.view.type === "root") {
-				this.handleRootSelection(key);
-			} else {
-				const action = this.view.group.items.find((a) => a.key === key);
-				if (action) {
-					this.done(action);
+			if (this.isExpanded) {
+				// In expanded mode, direct key jumps to item starting with that letter
+				const entry = this.entries[this.expandedEntryIndex!];
+				if (entry?.type === "action" && entry.expandableItems) {
+					const idx = entry.expandableItems.findIndex((a) => a.key === key || a.label.toLowerCase().startsWith(key));
+					if (idx >= 0) {
+						this.expandedHighlightIndex = idx;
+						this.scrollOffset = idx;
+					}
 				}
+				return;
 			}
-		} else if (data.length === 1 && data >= " " && data <= "~") {
-			// Fallback for raw printable characters (legacy terminals)
-			const key = data.toLowerCase();
 
 			if (this.view.type === "root") {
-				this.handleRootSelection(key);
+				this.handleRootSelection(key, shifted);
 			} else {
 				const action = this.view.group.items.find((a) => a.key === key);
 				if (action) {
-					this.done(action);
+					this.done(this.resolveAction(action, shifted));
 				}
 			}
 		}
 	}
 
-	private handleRootSelection(key: string): void {
+	private ensureExpandedVisible(): void {
+		if (this.expandedHighlightIndex < this.scrollOffset) {
+			this.scrollOffset = this.expandedHighlightIndex;
+		} else if (this.expandedHighlightIndex >= this.scrollOffset + MAX_EXPANDED_VISIBLE) {
+			this.scrollOffset = this.expandedHighlightIndex - MAX_EXPANDED_VISIBLE + 1;
+		}
+	}
+
+	private handleRootSelection(key: string, shifted = false): void {
 		const entry = this.entries.find((e) => {
 			if (e.type === "group") return e.group.key === key;
 			return e.key === key;
@@ -361,12 +487,13 @@ class LeaderKeyOverlay {
 			this.highlightedIndex = 0;
 		} else {
 			// Direct action — wrap it as an ActionItem and fire
-			this.done({
+			this.done(this.resolveAction({
 				key: entry.key,
 				label: entry.label,
 				description: entry.description,
 				action: entry.action,
-			});
+				shiftAction: entry.shiftAction,
+			}, shifted));
 		}
 	}
 
@@ -378,7 +505,12 @@ class LeaderKeyOverlay {
 		// Header
 		lines.push(f.top());
 
-		if (this.view.type === "root") {
+		if (this.isExpanded) {
+			const entry = this.entries[this.expandedEntryIndex!];
+			const label = entry?.type === "action" ? entry.label : "";
+			const breadcrumb = th.fg("dim", "< ") + th.fg("accent", th.bold(label)) + th.fg("dim", " (expanded)");
+			lines.push(f.row(breadcrumb));
+		} else if (this.view.type === "root") {
 			lines.push(f.row(th.fg("accent", th.bold("Leader Key"))));
 		} else {
 			const g = this.view.group;
@@ -392,6 +524,35 @@ class LeaderKeyOverlay {
 		const items = this.currentItems;
 		if (items.length === 0) {
 			lines.push(f.row(th.fg("muted", "  (no items)")));
+		} else if (this.isExpanded) {
+			// Expanded view with scrolling
+			const visibleEnd = Math.min(this.scrollOffset + MAX_EXPANDED_VISIBLE, items.length);
+
+			if (this.scrollOffset > 0) {
+				lines.push(f.row(th.fg("dim", `  ↑ ${this.scrollOffset} more`)));
+			}
+
+			for (let i = this.scrollOffset; i < visibleEnd; i++) {
+				const item = items[i];
+				const isHighlighted = i === this.expandedHighlightIndex;
+
+				const label = isHighlighted
+					? th.fg("accent", th.bold(item.label))
+					: th.fg("text", item.label);
+
+				let line = `${isHighlighted ? "> " : "  "}${label}`;
+
+				if (item.description) {
+					line += "  " + th.fg("dim", item.description);
+				}
+
+				lines.push(f.row(line));
+			}
+
+			const remaining = items.length - visibleEnd;
+			if (remaining > 0) {
+				lines.push(f.row(th.fg("dim", `  ↓ ${remaining} more`)));
+			}
 		} else {
 			for (let i = 0; i < items.length; i++) {
 				const item = items[i];
@@ -402,7 +563,7 @@ class LeaderKeyOverlay {
 					? th.fg("accent", th.bold(item.label))
 					: th.fg("text", item.label);
 
-				// Show a chevron for groups in root view
+				// Show a chevron for groups in root view, or tab hint for highlighted expandable items
 				let suffix = "";
 				if (this.view.type === "root") {
 					const entry = this.entries.find((e) => {
@@ -411,6 +572,8 @@ class LeaderKeyOverlay {
 					});
 					if (entry?.type === "group") {
 						suffix = " " + th.fg("dim", ">");
+					} else if (isHighlighted && entry?.type === "action" && entry.expandableItems) {
+						suffix = " " + th.fg("dim", "[tab expand]");
 					}
 				}
 
@@ -427,10 +590,12 @@ class LeaderKeyOverlay {
 		// Footer
 		lines.push(f.separator());
 
-		if (this.view.type === "root") {
-			lines.push(f.row(th.fg("dim", "press key to select | esc close")));
+		if (this.isExpanded) {
+			lines.push(f.row(th.fg("dim", "↑↓ scroll | enter run | tab collapse | esc back")));
+		} else if (this.view.type === "root") {
+			lines.push(f.row(th.fg("dim", "press key to select | tab expand | esc close")));
 		} else {
-			lines.push(f.row(th.fg("dim", "press key to run | bksp back | esc close")));
+			lines.push(f.row(th.fg("dim", "press key run | ⇧ key tab | bksp back | esc close")));
 		}
 
 		lines.push(f.bottom());

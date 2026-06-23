@@ -1,28 +1,39 @@
 /**
- * Handoff extension — transfer context to a new pi session in a cmux tab.
+ * Handoff extension — transfer context to a new pi session in a split or tab.
+ *
+ * Works with herder, tmux, or cmux. Detects which multiplexer is active automatically.
  *
  * Uses pi-vcc's algorithmic compaction (no LLM calls) to generate a
  * context summary, plus algorithmic extraction of git state, working files,
- * and language detection. Opens a new cmux tab with a fresh pi session
- * that has the summary + goal as its initial prompt.
+ * and language detection. Opens a fresh pi session that has the summary + goal
+ * as its initial prompt.
  *
  * Includes current tasks from pi-tasks in the handoff prompt.
  *
  * Usage:
  *   /handoff now implement this for teams as well
  *   /handoff check other places that need this fix
+ *   /handoff --tab continue in a new tab/window
  */
 
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@mariozechner/pi-coding-agent";
 import { convertToLlm } from "@mariozechner/pi-coding-agent";
 import { matchesKey, Key } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import * as path from "node:path";
 import { join, dirname, resolve } from "node:path";
-import { execSync, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
 import { OverlayFrame } from "../shared/overlay.js";
 import { THINKING_ROLES } from "../shared/thinking-colors.js";
+import {
+	detectMultiplexer,
+	createSplit,
+	createTab,
+	sendKeys,
+	getMultiplexerName,
+} from "../shared/multiplexer.js";
 
 import { normalize } from "@sting8k/pi-vcc/src/core/normalize";
 import { filterNoise } from "@sting8k/pi-vcc/src/core/filter-noise";
@@ -68,21 +79,29 @@ function loadFavouriteModels(): HandoffModel[] {
 	const configPath = join(dirname(new URL(import.meta.url).pathname), "../leader-key/favourite-models.json");
 	try {
 		const raw = readFileSync(configPath, "utf-8");
-		const parsed = JSON.parse(raw) as HandoffModel[];
+		const parsed = JSON.parse(raw) as Array<Partial<HandoffModel>>;
 		if (!Array.isArray(parsed)) return [];
-		return parsed.filter(
-			(e) => typeof e.key === "string" && typeof e.label === "string" && typeof e.provider === "string" && typeof e.model === "string",
-		);
+		return parsed
+			.filter(
+				(e) => typeof e.label === "string" && typeof e.provider === "string" && typeof e.model === "string",
+			)
+			.map((e, index) => ({
+				key: typeof e.key === "string" ? e.key : String(index + 1),
+				label: e.label!,
+				provider: e.provider!,
+				model: e.model!,
+				thinking: e.thinking,
+			}));
 	} catch {
 		return [];
 	}
 }
 
-async function pickModel(ctx: ExtensionContext): Promise<SelectedModel | null> {
+async function pickModel(ctx: ExtensionContext): Promise<SelectedModel | null | undefined> {
 	const favourites = loadFavouriteModels();
 	if (favourites.length === 0) {
-		ctx.ui.notify("No favourite models configured. Edit leader-key/favourite-models.json", "warning");
-		return null;
+		ctx.ui.notify("No favourite models configured; using current/default model.", "info");
+		return undefined;
 	}
 
 	interface PickerEntry {
@@ -204,11 +223,54 @@ function buildPiCommand(prompt: string, model?: SelectedModel): string {
 	return parts.map(shellQuote).join(" ");
 }
 
+/**
+ * Build a pi command that reads the prompt from a file via shell command
+ * substitution. The multiplexer only has to transmit the short
+ * `pi "$(cat '<file>')"` command; the full prompt text travels from disk
+ * straight into pi's argv without being typed/pasted through the mux.
+ */
+function buildPiCommandFromFile(promptFile: string, prompt: string, model?: SelectedModel): string {
+	const parts = [...getPiInvocationParts()];
+	if (model) {
+		parts.push("--model", `${model.provider}/${model.model}`, "--thinking", model.thinking);
+	}
+	const quotedParts = parts.map(shellQuote);
+	if (prompt.length > 0) {
+		// Path is single-quoted inside the substitution so spaces/special chars are safe.
+		quotedParts.push(`"$(cat ${shellQuote(promptFile)})"`);
+	}
+	return quotedParts.join(" ");
+}
+
+function writeTempPromptFile(prompt: string): string | null {
+	try {
+		const filePath = join(
+			tmpdir(),
+			`pi-handoff-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}.md`,
+		);
+		writeFileSync(filePath, prompt, "utf-8");
+		return filePath;
+	} catch {
+		return null;
+	}
+}
+
 const DEFAULT_HANDOFF_GOAL = "Continue from the previous session and pick up the next sensible step.";
 
 function normalizeGoal(goal: string | undefined): string {
 	const trimmed = goal?.trim();
 	return trimmed && trimmed.length > 0 ? trimmed : DEFAULT_HANDOFF_GOAL;
+}
+
+function parseArgs(raw: string): { useTab: boolean; goal: string } {
+	const trimmed = raw.trim();
+	if (trimmed.startsWith("--tab ")) {
+		return { useTab: true, goal: trimmed.slice(6).trim() };
+	}
+	if (trimmed === "--tab") {
+		return { useTab: true, goal: "" };
+	}
+	return { useTab: false, goal: trimmed };
 }
 
 /**
@@ -523,7 +585,6 @@ interface HandoffContext {
 	summary: string;
 	tasks: HandoffTask[] | null;
 	sessionFile: string | undefined;
-	language: { language: string; sample: string } | null;
 	gitState: string | null;
 	workingFiles: string[];
 	artifactPath: string | null;
@@ -537,15 +598,6 @@ function buildHandoffPrompt(hctx: HandoffContext): string {
 	const effectiveGoal = normalizeGoal(hctx.goal);
 
 	parts.push(effectiveGoal);
-
-	// ── Language ──
-	if (hctx.language) {
-		parts.push(
-			`\n**IMPORTANT: Continue in ${hctx.language.language} — the same language as the previous session.**`
-			+ " Here is a sample of how the user was communicating:"
-			+ `\n> ${hctx.language.sample.slice(0, 200)}`,
-		);
-	}
 
 	// ── Parent session ──
 	if (hctx.sessionFile) {
@@ -594,10 +646,6 @@ function buildHandoffPrompt(hctx: HandoffContext): string {
 	return parts.join("\n");
 }
 
-function cmuxShellEscape(value: string): string {
-	return `'${value.replace(/'/g, "'\"'\"'")}'`;
-}
-
 /**
  * Save handoff prompt as an artifact for resilience and debuggability.
  * Returns the artifact file path, or null on failure.
@@ -617,32 +665,35 @@ function saveHandoffArtifact(prompt: string, sessionId: string): string | null {
 }
 
 /**
- * Core handoff: generate summary, open cmux split, launch pi with prompt.
+ * Core handoff: generate summary, open split/tab, launch pi with prompt.
  * All operations are algorithmic (no LLM calls) for speed.
  */
 async function performHandoff(
 	ctx: ExtensionContext,
 	goal?: string,
 	model?: SelectedModel,
+	useTab = false,
 ): Promise<string | undefined> {
 	if (!ctx.hasUI) return "Handoff requires interactive mode.";
-	if (!process.env.CMUX_SOCKET_PATH) return "cmux is not available. Cannot open a split.";
 
-	// Start cmux split immediately (runs in parallel with prompt building)
-	const splitPromise = new Promise<string | undefined>((resolve) => {
+	const mux = detectMultiplexer();
+	if (!mux) return "No supported multiplexer detected (herder, tmux, or cmux).";
+
+	// Start split/tab immediately (runs in parallel with prompt building)
+	const targetPromise = new Promise<ReturnType<typeof createSplit> | string>((resolve) => {
 		try {
-			const out = execSync("cmux new-split right", { encoding: "utf8" }).trim();
-			const match = out.match(/surface:\d+/);
-			if (!match) { resolve(`Unexpected cmux new-split output: ${out}`); return; }
-			const surface = match[0];
-			execSync(`cmux rename-tab --surface ${cmuxShellEscape(surface)} ${cmuxShellEscape("handoff")}`, { encoding: "utf8" });
-			resolve(surface);
+			const target = useTab ? createTab("handoff") : createSplit("right");
+			if (!target) {
+				resolve(`Failed to create ${useTab ? "tab" : "split"} in ${mux}.`);
+				return;
+			}
+			resolve(target);
 		} catch (err) {
-			resolve(`cmux error: ${err}`);
+			resolve(`${mux} error: ${err}`);
 		}
 	});
 
-	// Build prompt concurrently with cmux split
+	// Build prompt concurrently with split/tab creation
 	const summary = buildContextSummary(ctx);
 	if (!summary) return "No conversation to hand off.";
 
@@ -654,7 +705,7 @@ async function performHandoff(
 		summary,
 		tasks: readTasks(sessionId),
 		sessionFile,
-		language: detectLanguage(ctx),
+
 		gitState: buildGitState(),
 		workingFiles: extractWorkingFiles(ctx),
 		artifactPath: null, // set after saving
@@ -669,21 +720,29 @@ async function performHandoff(
 	// Rebuild with artifact path included
 	const finalPrompt = artifactPath ? buildHandoffPrompt(hctx) : prompt;
 
-	// Wait for cmux split to be ready
-	const surfaceOrError = await splitPromise;
-	if (!surfaceOrError || !surfaceOrError.startsWith("surface:")) {
-		return surfaceOrError ?? "Failed to create cmux split.";
+	// Wait for split/tab to be ready
+	const targetOrError = await targetPromise;
+	if (typeof targetOrError === "string") {
+		return targetOrError;
 	}
-	const surface = surfaceOrError;
+	const target = targetOrError;
 
 	// Wait for shell to initialize
 	await new Promise((r) => setTimeout(r, 500));
 
-	// Launch pi with the handoff prompt
-	const command = buildPiCommand(finalPrompt, model);
-	execSync(`cmux send --surface ${cmuxShellEscape(surface)} ${cmuxShellEscape(command + "\n")}`, {
-		encoding: "utf8",
-	});
+	// Launch pi with the handoff prompt.
+	// Write the prompt to a temp file and pass it via `$(cat <file>)` so the
+	// multiplexer only transmits a short command, not the whole prompt text.
+	const promptFile = writeTempPromptFile(finalPrompt);
+	if (!promptFile) return "Failed to save handoff prompt to disk.";
+
+	const command = buildPiCommandFromFile(promptFile, finalPrompt, model);
+	sendKeys(target, command);
+
+	// Safe to delete once the shell has expanded the command substitution.
+	setTimeout(() => {
+		try { unlinkSync(promptFile); } catch {}
+	}, 30000);
 
 	return undefined;
 }
@@ -691,15 +750,16 @@ async function performHandoff(
 export default function (pi: ExtensionAPI) {
 	// /handoff command
 	pi.registerCommand("handoff", {
-		description: "Transfer context to a new pi session in a cmux split. Usage: /handoff [optional goal]",
+		description: "Transfer context to a new pi session in a split or tab (tmux/cmux). Usage: /handoff [--tab] [optional goal]",
 		handler: async (args, ctx) => {
+			const { useTab, goal } = parseArgs(args);
 			const model = await pickModel(ctx);
-			if (!model) return; // cancelled
-			const error = await performHandoff(ctx, args, model);
+			if (model === null) return; // cancelled
+			const error = await performHandoff(ctx, goal, model, useTab);
 			if (error) {
 				ctx.ui.notify(error, "error");
 			} else {
-				ctx.ui.notify("Handoff sent to new cmux split.", "info");
+				ctx.ui.notify(`Handoff sent to new ${getMultiplexerName()} ${useTab ? "tab" : "split"}.`, "info");
 			}
 		},
 	});
@@ -709,14 +769,16 @@ export default function (pi: ExtensionAPI) {
 		name: "handoff",
 		label: "Handoff",
 		description:
-			"Transfer context to a new pi session in a separate cmux split. ONLY use when the user explicitly asks for a handoff. Goal is optional; if omitted, the new session continues from the previous one.",
+			"Transfer context to a new pi session in a separate split or tab. ONLY use when the user explicitly asks for a handoff. Goal is optional; if omitted, the new session continues from the previous one.",
 		parameters: Type.Object({
 			goal: Type.Optional(Type.String({ description: "Optional goal/task for the new session" })),
+			tab: Type.Optional(Type.Boolean({ description: "Open in a new tab/window instead of a split" })),
 		}),
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const effectiveGoal = normalizeGoal(params.goal);
-			const error = await performHandoff(ctx, params.goal);
+			const useTab = params.tab === true;
+			const error = await performHandoff(ctx, params.goal, undefined, useTab);
 			if (error) {
 				return {
 					content: [{ type: "text" as const, text: `Handoff failed: ${error}` }],
@@ -724,8 +786,8 @@ export default function (pi: ExtensionAPI) {
 				};
 			}
 			return {
-				content: [{ type: "text" as const, text: `Handoff started in a new cmux split with goal: ${effectiveGoal}` }],
-				details: { goal: effectiveGoal },
+				content: [{ type: "text" as const, text: `Handoff started in a new ${getMultiplexerName()} ${useTab ? "tab" : "split"} with goal: ${effectiveGoal}` }],
+				details: { goal: effectiveGoal, tab: useTab },
 			};
 		},
 	});

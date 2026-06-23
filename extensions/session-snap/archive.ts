@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
 import { readFileSync, unlinkSync } from "node:fs";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -6,13 +6,13 @@ import { dirname } from "node:path";
 import { type ArchivedSession, CONFIG } from "./types.js";
 import { type SessionMetrics, extractFullText } from "./scanner.js";
 
-let _db: DatabaseSync | null = null;
+let _db: any | null = null;
 
 /** Get or create the SQLite database connection */
-function getDb(): DatabaseSync {
+function getDb(): any {
   if (_db) return _db;
 
-  _db = new DatabaseSync(CONFIG.DB_PATH);
+  _db = new Database(CONFIG.DB_PATH);
 
   // Enable WAL mode for better concurrent access
   _db.exec("PRAGMA journal_mode=WAL");

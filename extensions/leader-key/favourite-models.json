@@ -1,44 +1,44 @@
 [
-  {
-    "label": "Opus 4.6",
-    "provider": "anthropic",
-    "model": "claude-opus-4-6",
-    "thinking": "medium"
-  },
-  {
-    "label": "Sonnet 4.6",
-    "provider": "anthropic",
-    "model": "claude-sonnet-4-6",
-    "thinking": "medium"
-  },
-  {
-    "label": "Opus 4.6",
-    "provider": "github-copilot",
-    "model": "claude-opus-4.6",
-    "thinking": "medium"
-  },
-  {
-    "label": "Sonnet 4.6",
-    "provider": "github-copilot",
-    "model": "claude-sonnet-4.6",
-    "thinking": "medium"
-  },
-  {
-    "label": "GPT-5.4",
-    "provider": "github-copilot",
-    "model": "gpt-5.4",
-    "thinking": "medium"
-  },
-  {
-    "label": "GPT-5.4",
-    "provider": "openai-codex",
-    "model": "gpt-5.4",
-    "thinking": "medium"
-  },
-  {
-    "label": "Opus 4.7",
-    "provider": "anthropic",
-    "model": "claude-opus-4-7",
-    "thinking": "medium"
-  }
+    {
+        "label": "GPT 5.5",
+        "provider": "openai-codex",
+        "model": "gpt-5.5",
+        "thinking": "xhigh"
+    },
+    {
+        "label": "KimiCoding",
+        "provider": "kimi-coding",
+        "model": "kimi-for-coding",
+        "thinking": "high"
+    },
+    {
+        "label": "Kimikase",
+        "provider": "opencode-go",
+        "model": "kimi-k2.7-code",
+        "thinking": "high"
+    },
+    {
+        "label": "GLM-5.2",
+        "provider": "opencode-go",
+        "model": "glm-5.2",
+        "thinking": "high"
+    },
+    {
+        "label": "DeepSeek V4 Pro",
+        "provider": "opencode-go",
+        "model": "deepseek-v4-pro",
+        "thinking": "high"
+    },
+    {
+        "label": "Flash 3.5",
+        "provider": "google",
+        "model": "gemini-3.5-flash",
+        "thinking": "high"
+    },
+    {
+        "label": "Pro 3.1",
+        "provider": "google",
+        "model": "gemini-3.1-pro-preview",
+        "thinking": "high"
+    }
 ]

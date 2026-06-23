@@ -98,6 +98,24 @@ interface SearchableItem {
 
 const MAX_VISIBLE = 15;
 
+/** Simple word-wrap: split text into lines of at most maxWidth visible chars. */
+function wrapText(text: string, maxWidth: number): string[] {
+	const words = text.split(/\s+/);
+	const lines: string[] = [];
+	let current = "";
+	for (const word of words) {
+		const test = current ? current + " " + word : word;
+		if (test.length > maxWidth && current) {
+			lines.push(current);
+			current = word;
+		} else {
+			current = test;
+		}
+	}
+	if (current) lines.push(current);
+	return lines;
+}
+
 export async function searchableSelect<T extends string>(
 	ctx: ExtensionContext,
 	title: string,
@@ -111,6 +129,7 @@ export async function searchableSelect<T extends string>(
 		let filteredItems = [...items];
 		let highlightedIndex = defaultIndex >= 0 ? defaultIndex : 0;
 		let scrollOffset = 0;
+		let expandedDescriptionIndex: number | null = null;
 
 		const th = theme;
 
@@ -122,6 +141,7 @@ export async function searchableSelect<T extends string>(
 			}
 			highlightedIndex = 0;
 			scrollOffset = 0;
+			expandedDescriptionIndex = null;
 		};
 
 		const ensureVisible = () => {
@@ -163,17 +183,29 @@ export async function searchableSelect<T extends string>(
 					for (let i = scrollOffset; i < visibleEnd; i++) {
 						const item = filteredItems[i];
 						const isHighlighted = i === highlightedIndex;
+						const isExpanded = i === expandedDescriptionIndex;
 
 						const label = isHighlighted
 							? th.fg("accent", th.bold(item.label))
 							: th.fg("text", item.label);
 
-						let line = `${isHighlighted ? "> " : "  "}${label}`;
-
-						if (item.description) {
-							line += "  " + th.fg("dim", item.description);
+						// Expanded view: spacious card with colored description
+						if (isExpanded && item.description) {
+							lines.push(f.row(""));
+							lines.push(f.row(`${isHighlighted ? "> " : "  "}${th.fg("accent", th.bold("▸ " + item.label))}`));
+							const wrapped = wrapText(item.description, f.innerWidth - 4);
+							for (const wrappedLine of wrapped) {
+								lines.push(f.row("    " + th.fg("text", wrappedLine)));
+							}
+							lines.push(f.row(""));
+							continue;
 						}
 
+						// Compact inline view
+						let line = `${isHighlighted ? "> " : "  "}${label}`;
+						if (item.description && !isExpanded) {
+							line += "  " + th.fg("dim", item.description);
+						}
 						lines.push(f.rowTruncated(line));
 					}
 
@@ -185,7 +217,7 @@ export async function searchableSelect<T extends string>(
 
 				// Footer
 				lines.push(f.separator());
-				const hint = helpText ?? "type to search • ↑↓ navigate • enter select • esc cancel";
+				const hint = helpText ?? "type to search • ↑↓ navigate • tab expand • enter select • esc cancel";
 				lines.push(f.row(th.fg("dim", hint)));
 				lines.push(f.bottom());
 
@@ -199,13 +231,27 @@ export async function searchableSelect<T extends string>(
 					return;
 				}
 
-				// Backspace: trim search or cancel if empty
+				// Backspace: collapse expansion, then trim search, then cancel
 				if (matchesKey(data, "backspace")) {
-					if (searchText.length > 0) {
+					if (expandedDescriptionIndex !== null) {
+						expandedDescriptionIndex = null;
+						tui.requestRender();
+					} else if (searchText.length > 0) {
 						searchText = searchText.slice(0, -1);
 						applyFilter();
 						tui.requestRender();
 					}
+					return;
+				}
+
+				// Tab: toggle description expansion for highlighted item
+				if (matchesKey(data, "tab")) {
+					if (expandedDescriptionIndex === highlightedIndex) {
+						expandedDescriptionIndex = null;
+					} else if (filteredItems.length > 0 && highlightedIndex < filteredItems.length) {
+						expandedDescriptionIndex = highlightedIndex;
+					}
+					tui.requestRender();
 					return;
 				}
 
