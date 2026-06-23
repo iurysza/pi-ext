@@ -55,7 +55,7 @@ Requires [Pi](https://github.com/badlogic/pi) v0.37.3+.
 
 ### [Leader Key](extensions/leader-key/)
 
-Press `Ctrl+X` to open a floating command palette — like Vim's which-key or Emacs' leader key. Actions are organized into single-character groups (`s` for Session, `m` for Model, `f` for Favourites, `t` for Thinking level, `l` for Labels, `c` for Spec — the OpenSpec explore/spec/apply/review/archive flow). Auto-discovers extension commands and merges them with built-in actions.
+Press `Ctrl+X` to open a floating command palette — like Vim's which-key or Emacs' leader key. Actions are organized into single-character groups (`s` for Session, `m` for Model, `f` for Favourites, `t` for Thinking level, `l` for Labels, `c` for Spec — the OpenSpec explore/spec/apply/review/archive flow). Auto-discovers extension commands and merges them with built-in actions. In session actions, `Shift+key` runs the tab/window variant when available.
 
 Includes sub-modules:
 - **Model Switcher** — searchable provider → model → thinking level picker
@@ -114,7 +114,7 @@ Gives the model a tool to query previous pi sessions for context, decisions, or 
 
 ### [Handoff](extensions/handoff/)
 
-`/handoff <goal>` transfers context to a fresh pi session running in a new cmux tab. Uses pi-vcc's algorithmic compaction (no LLM calls) to build a summary, plus algorithmic extraction of git state, working files, and language detection. Includes current tasks from pi-tasks. The new session starts with the summary + goal as its initial prompt.
+`/handoff [--tab] <goal>` transfers context to a fresh pi session in a tmux/cmux split by default, or a new tab/window with `--tab`. Uses pi-vcc's algorithmic compaction (no LLM calls) to build a summary, plus algorithmic extraction of git state, working files, and language detection. Includes current tasks from pi-tasks. The new session starts with the summary + goal as its initial prompt.
 
 ### [Permissions](extensions/permissions/)
 
@@ -122,7 +122,7 @@ Three-mode permission system: `yolo` (everything allowed), `safe` (rule-based ch
 
 ### [cmux](extensions/cmux/)
 
-Native integration with [cmux](https://github.com/badlogic/cmux). Context-aware notifications via the cmux socket API, sidebar status pills (model, state, thinking, tokens), and custom tools for the model (browser, workspace, notify). Silent no-op when not running inside cmux.
+Native integration with [cmux](https://github.com/badlogic/cmux). Context-aware notifications via the cmux socket API, sidebar status pills (model, state, thinking, tokens), and custom tools for the model (browser, workspace, notify). `/split-fork [--tab]` works in tmux or cmux; other cmux features stay silent when not running inside cmux.
 
 ### [Superconductor](extensions/superconductor/)
 

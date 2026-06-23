@@ -134,6 +134,30 @@ export function buildSessionEntries(pi: ExtensionAPI): TopLevelEntry {
 					action: (ctx) => openSessionTree(pi, ctx),
 				},
 				{
+					key: "f",
+					label: "Fork session",
+					description: "split; ⇧ tab",
+					action: (ctx) => {
+						ctx.ui.setEditorText("/split-fork");
+						setTimeout(() => process.stdin.emit("data", "\r"), 0);
+					},
+					shiftAction: (ctx) => {
+						ctx.ui.setEditorText("/split-fork --tab");
+						setTimeout(() => process.stdin.emit("data", "\r"), 0);
+					},
+				},
+				{
+					key: "h",
+					label: "Handoff",
+					description: "split; ⇧ tab",
+					action: (ctx) => {
+						ctx.ui.setEditorText("/handoff ");
+					},
+					shiftAction: (ctx) => {
+						ctx.ui.setEditorText("/handoff --tab ");
+					},
+				},
+				{
 					key: "c",
 					label: "Compact",
 					description: "LLM summary",

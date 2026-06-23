@@ -9,7 +9,8 @@
     "@sting8k/pi-vcc": "^0.3.5",
     "@tintinweb/pi-tasks": "^0.4.2",
     "pi-taskflow": "^0.1.5",
-    "typebox": "^1.1.32"
+    "typebox": "^1.1.32",
+    "better-sqlite3": "^12.10.0"
   },
   "optionalDependencies": {
     "@ataraxy-labs/sem": "^0.3.21"
@@ -38,6 +39,9 @@
       "./extensions/tool-pills/index.ts",
       "./extensions/superconductor/index.ts",
       "./extensions/session-store/index.ts",
+      "./extensions/cmux/index.ts",
+      "./extensions/handoff/index.ts",
+      "./extensions/session-snap/index.ts",
       "./extensions/pi-telescope/index.ts",
       "./extensions/pi-sem/index.ts"
     ],

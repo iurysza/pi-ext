@@ -100,24 +100,24 @@ export default function (pi: ExtensionAPI) {
 
 	// find + grep: handled by pi-fff extension (SIMD-accelerated, own rendering)
 
-	// bash — special: syntax-highlighted command, tail mode
-	const origBash = createBashToolDefinition(cwd);
-	pi.registerTool({
-		...origBash,
-		parameters: { ...origBash.parameters },
-		renderCall(args: any, theme: Theme, _ctx: any) {
-			const cmd = args.command;
-			const highlighted = highlightCode(cmd, "bash").join("\n");
-			const isMultiLine = cmd.includes("\n") || cmd.length > 80;
-			if (isMultiLine) {
-				return new Text(pill("bash", theme) + "\n" + highlighted, 0, 0);
-			}
-			return new Text(pill("bash", theme) + " " + highlighted, 0, 0);
-		},
-		renderResult(result: any, { expanded }: { expanded: boolean }, theme: Theme, _ctx: any) {
-			return renderTextResult(getText(result), expanded, theme, "tail");
-		},
-	});
+	// bash — disabled here so secret-env extension can override it safely
+	// const origBash = createBashToolDefinition(cwd);
+	// pi.registerTool({
+	// 	...origBash,
+	// 	parameters: { ...origBash.parameters },
+	// 	renderCall(args: any, theme: Theme, _ctx: any) {
+	// 		const cmd = args.command;
+	// 		const highlighted = highlightCode(cmd, "bash").join("\n");
+	// 		const isMultiLine = cmd.includes("\n") || cmd.length > 80;
+	// 		if (isMultiLine) {
+	// 			return new Text(pill("bash", theme) + "\n" + highlighted, 0, 0);
+	// 		}
+	// 		return new Text(pill("bash", theme) + " " + highlighted, 0, 0);
+	// 	},
+	// 	renderResult(result: any, { expanded }: { expanded: boolean }, theme: Theme, _ctx: any) {
+	// 		return renderTextResult(getText(result), expanded, theme, "tail");
+	// 	},
+	// });
 
 	// write + edit — diff renderer with pills, expand/collapse, fallbacks
 	registerDiffTools(pi);
