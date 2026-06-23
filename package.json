@@ -35,6 +35,7 @@
       "./extensions/session-query/session-query.ts",
       "./extensions/ask-user-question/index.ts",
       "./extensions/tool-pills/index.ts",
+      "./extensions/split-fork/index.ts",
       "./extensions/cmux/index.ts",
 
       "./extensions/session-snap/index.ts",
