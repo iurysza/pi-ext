@@ -14,6 +14,11 @@ import type { SessionEntry } from "@mariozechner/pi-coding-agent";
 import { Markdown, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { TelescopeProvider } from "../types.js";
 import { copyToClipboard } from "../clipboard.js";
+import {
+	listIndexedSessions,
+	searchSessions as searchStoredSessions,
+	type SessionRecord,
+} from "../../session-store/db.js";
 
 const SESSION_BASE = join(process.env.HOME ?? "~", ".pi/agent/sessions");
 
@@ -108,7 +113,19 @@ function parseSession(filePath: string): SessionInfo | null {
 	}
 }
 
-function findSessions(): SessionInfo[] {
+function recordToInfo(record: SessionRecord): SessionInfo {
+	const firstMessage = record.search_text.split("\n")[0]?.trim() || "(empty)";
+	return {
+		path: record.path,
+		cwd: record.cwd,
+		name: record.name ?? undefined,
+		firstMessage,
+		modified: new Date(record.file_mtime || record.last_activity_at || Date.now()),
+		messageCount: record.user_message_count + record.assistant_message_count,
+	};
+}
+
+function findSessionsFromFiles(): SessionInfo[] {
 	if (!existsSync(SESSION_BASE)) return [];
 
 	const results: SessionInfo[] = [];
@@ -128,6 +145,35 @@ function findSessions(): SessionInfo[] {
 
 	results.sort((a, b) => b.modified.getTime() - a.modified.getTime());
 	return results;
+}
+
+function findSessions(): SessionInfo[] {
+	try {
+		const indexed = listIndexedSessions({ limit: 5000 })
+			.filter((record) => existsSync(record.path))
+			.map(recordToInfo);
+		if (indexed.length > 0) return indexed;
+	} catch {
+		// Store may be unavailable during early startup; fall back to direct scan.
+	}
+	return findSessionsFromFiles();
+}
+
+function searchSessions(query: string): SessionInfo[] {
+	const trimmed = query.trim();
+	if (!trimmed) return findSessions();
+
+	try {
+		return searchStoredSessions(trimmed, 500)
+			.filter((result) => existsSync(result.record.path))
+			.map((result) => recordToInfo(result.record));
+	} catch {
+		const lower = trimmed.toLowerCase();
+		return findSessionsFromFiles().filter((session) => {
+			const text = `${session.name ?? ""} ${session.firstMessage} ${session.cwd}`.toLowerCase();
+			return text.includes(lower);
+		});
+	}
 }
 
 // ── Message extraction ───────────────────────────────
@@ -301,9 +347,15 @@ export function createSessionsProvider(): TelescopeProvider<SessionInfo> {
 			return findSessions();
 		},
 
+		supportsDynamicSearch: true,
+
+		async search(query) {
+			return searchSessions(query);
+		},
+
 		getSearchText(item) {
 			const label = item.name ?? item.firstMessage;
-			return `${label} ${item.cwd}`;
+			return `${label} ${item.firstMessage} ${item.cwd} ${item.path}`;
 		},
 
 		getDisplayText(item, theme) {

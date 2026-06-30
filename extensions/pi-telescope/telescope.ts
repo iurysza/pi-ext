@@ -200,7 +200,15 @@ export async function openTelescope(
 						} catch {}
 						state.loading = false;
 					} else {
-						state.filtered = [];
+						try {
+							state.allItems = await currentProvider.load(ctx.cwd);
+						} catch {}
+						state.filtered = state.allItems.map((item) => ({
+							item,
+							score: 0,
+							indices: [],
+						}));
+						state.loading = false;
 					}
 					state.selectedIndex = 0;
 					state.scrollOffset = 0;
@@ -317,12 +325,7 @@ export async function openTelescope(
 			state.loading = true;
 			exitMode();
 
-			if (!currentProvider.supportsDynamicSearch) {
-				loadItems();
-			} else {
-				state.loading = false;
-				tui.requestRender();
-			}
+			loadItems();
 		};
 
 		// ── Selection helpers ────────────────────────
@@ -800,11 +803,7 @@ export async function openTelescope(
 
 		// ── Init ─────────────────────────────────────
 
-		if (!currentProvider.supportsDynamicSearch) {
-			loadItems();
-		} else {
-			state.loading = false;
-		}
+		loadItems();
 
 		return {
 			render,
