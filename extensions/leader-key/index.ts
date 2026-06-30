@@ -35,7 +35,11 @@ import { registerBridgeCommands } from "./context-helpers.js";
 // Build top-level entries
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildEntries(pi: ExtensionAPI, ctx: ExtensionContext): TopLevelEntry[] {
+function buildEntries(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	openFavouriteModels: (ctx: ExtensionContext) => Promise<void>,
+): TopLevelEntry[] {
 	const entries: TopLevelEntry[] = [];
 
 	// ── Session ─────────────────────────────────────────────────────────
@@ -44,13 +48,13 @@ function buildEntries(pi: ExtensionAPI, ctx: ExtensionContext): TopLevelEntry[] 
 	// ── Labels ──────────────────────────────────────────────────────────
 	entries.push(buildLabelEntries(pi));
 
-	// ── Favourite models ────────────────────────────────────────────────
+	// ── Scoped models ───────────────────────────────────────────────────
 	entries.push({
 		type: "action",
 		key: "m",
-		label: "Favourites",
-		description: "quick-switch favourite models",
-		action: (ctx) => runFavouriteModels(pi, ctx),
+		label: "Scoped",
+		description: "quick-switch Pi scoped models",
+		action: (ctx) => openFavouriteModels(ctx),
 	});
 
 	// ── Permissions mode ────────────────────────────────────────────────
@@ -449,10 +453,24 @@ export default function leaderKeyExtension(pi: ExtensionAPI) {
 	// Register internal commands that bridge shortcut→command context
 	registerBridgeCommands(pi);
 
+	let stopFavouriteModelsShortcut: (() => void) | undefined;
+	let favouriteModelsOpen = false;
+
+	async function openFavouriteModels(ctx: ExtensionContext) {
+		if (!ctx.hasUI || favouriteModelsOpen) return;
+
+		favouriteModelsOpen = true;
+		try {
+			await runFavouriteModels(pi, ctx);
+		} finally {
+			favouriteModelsOpen = false;
+		}
+	}
+
 	async function openLeaderKey(ctx: ExtensionContext) {
 		if (!ctx.hasUI) return;
 
-		const entries = buildEntries(pi, ctx);
+		const entries = buildEntries(pi, ctx, openFavouriteModels);
 
 		const selected = await ctx.ui.custom<ActionItem | null>(
 			(tui, theme, _kb, done) => {
@@ -485,6 +503,22 @@ export default function leaderKeyExtension(pi: ExtensionAPI) {
 			}
 		}
 	}
+
+	pi.on("session_start", async (_event, ctx) => {
+		if (!ctx.hasUI) return;
+
+		stopFavouriteModelsShortcut?.();
+		stopFavouriteModelsShortcut = ctx.ui.onTerminalInput((data) => {
+			if (parseKey(data) !== Key.ctrl("m")) return;
+			void openFavouriteModels(ctx);
+			return { consume: true };
+		});
+	});
+
+	pi.on("session_shutdown", async () => {
+		stopFavouriteModelsShortcut?.();
+		stopFavouriteModelsShortcut = undefined;
+	});
 
 	// Register as a command
 	pi.registerCommand("lk", {

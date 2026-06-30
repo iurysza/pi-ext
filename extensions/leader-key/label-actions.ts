@@ -5,8 +5,10 @@
 import type {
 	ExtensionAPI,
 	ExtensionContext,
+	SessionManager,
 } from "@mariozechner/pi-coding-agent";
-import type { SessionTreeNode } from "@mariozechner/pi-coding-agent/dist/core/session-manager.js";
+
+type SessionTreeNode = ReturnType<SessionManager["getTree"]>[number];
 import type { TopLevelEntry } from "./types.js";
 import { searchableSelect } from "./model-switcher.js";
 import { collectLabeledEntries, tryNavigateTree } from "./context-helpers.js";

@@ -1,67 +1,234 @@
 /**
- * Favourite Models Picker
+ * Scoped Models Picker
  *
- * Quick-switch to a favourite model with inline thinking level.
- * Favourites are configured in favourite-models.json (max 8 entries).
+ * Legacy file name kept for leader-key wiring, but the picker no longer reads
+ * favourite-models.json. Entries now come from Pi's enabledModels scope plus
+ * the current model registry.
  *
- * Each entry specifies:
- *   - label:     display name shown in the picker
- *   - provider:  provider name (e.g. "anthropic", "google", "openai")
- *   - model:     model id
- *   - thinking:  (optional) default thinking level
+ * Behavior:
+ *   - If enabledModels is configured, resolve those patterns in order.
+ *   - If enabledModels is empty, fall back to all available models.
+ *   - Pattern-level thinking suffixes like "provider/model:high" are honored.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { SettingsManager } from "@mariozechner/pi-coding-agent";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import { matchesKey, Key } from "@mariozechner/pi-tui";
+import type { Model } from "@mariozechner/pi-ai";
+import { matchesKey, parseKey, Key } from "@mariozechner/pi-tui";
 import { OverlayFrame } from "../shared/overlay.js";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { ALL_THINKING_LEVELS } from "./model-switcher";
+import { ALL_THINKING_LEVELS } from "./model-switcher.js";
 import { THINKING_ROLES } from "../shared/thinking-colors.js";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Config types
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface FavouriteModelEntry {
 	label: string;
 	provider: string;
 	model: string;
-	thinking?: string;
+	thinking?: ThinkingLevel;
 }
 
-const MAX_FAVOURITES = 8;
+interface ModelRow {
+	type: "model";
+	fav: FavouriteModelEntry;
+	modelIndex: number;
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Load config
-// ─────────────────────────────────────────────────────────────────────────────
+interface HeaderRow {
+	type: "header";
+	provider: string;
+	count: number;
+}
 
-function loadFavourites(): FavouriteModelEntry[] {
-	const configPath = join(dirname(new URL(import.meta.url).pathname), "favourite-models.json");
-	try {
-		const raw = readFileSync(configPath, "utf-8");
-		const parsed = JSON.parse(raw) as FavouriteModelEntry[];
-		if (!Array.isArray(parsed)) {
-			return [];
+type DisplayRow = ModelRow | HeaderRow;
+
+function buildDisplayRows(favourites: FavouriteModelEntry[]): DisplayRow[] {
+	const sorted = favourites
+		.map((f, i) => ({ ...f, originalIndex: i }))
+		.sort((a, b) => {
+			const pc = a.provider.localeCompare(b.provider);
+			if (pc !== 0) return pc;
+			return a.label.localeCompare(b.label);
+		});
+
+	const rows: DisplayRow[] = [];
+	let lastProvider = "";
+	let providerCount = 0;
+	let providerStart = 0;
+
+	for (let i = 0; i < sorted.length; i++) {
+		const item = sorted[i];
+		if (item.provider !== lastProvider) {
+			if (lastProvider) {
+				rows[providerStart] = { type: "header", provider: lastProvider, count: providerCount };
+			}
+			rows.push({ type: "header", provider: item.provider, count: 0 });
+			providerStart = rows.length - 1;
+			providerCount = 0;
+			lastProvider = item.provider;
 		}
-		// Enforce max and validate
-		return parsed
-			.filter(
-				(e) =>
-					typeof e.label === "string" &&
-					typeof e.provider === "string" &&
-					typeof e.model === "string",
-			)
-			.slice(0, MAX_FAVOURITES);
-	} catch {
-		return [];
+		rows.push({ type: "model", fav: item, modelIndex: item.originalIndex });
+		providerCount++;
 	}
+	if (lastProvider) {
+		rows[providerStart] = { type: "header", provider: lastProvider, count: providerCount };
+	}
+
+	return rows;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Favourite Models Picker UI
-// ─────────────────────────────────────────────────────────────────────────────
+function nextModelRow(rows: DisplayRow[], from: number, dir: -1 | 1): number {
+	let i = from + dir;
+	while (i >= 0 && i < rows.length) {
+		if (rows[i].type === "model") return i;
+		i += dir;
+	}
+	return from;
+}
+
+function nthModelRow(rows: DisplayRow[], n: number): number {
+	let count = 0;
+	for (let i = 0; i < rows.length; i++) {
+		if (rows[i].type === "model") {
+			if (count === n) return i;
+			count++;
+		}
+	}
+	return -1;
+}
+
+const THINKING_SHORTCUTS: Record<string, ThinkingLevel> = {
+	o: "off",
+	i: "minimal",
+	l: "low",
+	m: "medium",
+	h: "high",
+	x: "xhigh",
+};
+
+function getPrintableKey(data: string): string | null {
+	const parsed = parseKey(data);
+	if (parsed && parsed.length === 1 && parsed >= " " && parsed <= "~") {
+		return parsed.toLowerCase();
+	}
+	if (data.length === 1 && data >= " " && data <= "~") {
+		return data.toLowerCase();
+	}
+	return null;
+}
+
+function isThinkingLevel(value: string | undefined): value is ThinkingLevel {
+	return !!value && ALL_THINKING_LEVELS.includes(value as ThinkingLevel);
+}
+
+function escapeRegExp(text: string): string {
+	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function globToRegExp(pattern: string): RegExp {
+	return new RegExp(
+		"^" + escapeRegExp(pattern).replace(/\\\*/g, ".*").replace(/\\\?/g, ".") + "$",
+		"i",
+	);
+}
+
+function findExactModelReferenceMatch(
+	modelReference: string,
+	availableModels: Model<any>[],
+): Model<any> | undefined {
+	const slashIndex = modelReference.indexOf("/");
+	if (slashIndex !== -1) {
+		const provider = modelReference.substring(0, slashIndex).toLowerCase();
+		const modelId = modelReference.substring(slashIndex + 1).toLowerCase();
+		return availableModels.find(
+			(model) => model.provider.toLowerCase() === provider && model.id.toLowerCase() === modelId,
+		);
+	}
+
+	const matches = availableModels.filter((model) => model.id.toLowerCase() === modelReference.toLowerCase());
+	return matches.length === 1 ? matches[0] : undefined;
+}
+
+function sortAllAvailableModels(
+	availableModels: Model<any>[],
+	currentModel: Model<any> | undefined,
+): Model<any>[] {
+	return [...availableModels].sort((a, b) => {
+		const aIsCurrent = currentModel?.provider === a.provider && currentModel?.id === a.id;
+		const bIsCurrent = currentModel?.provider === b.provider && currentModel?.id === b.id;
+		if (aIsCurrent && !bIsCurrent) return -1;
+		if (!aIsCurrent && bIsCurrent) return 1;
+
+		const providerCmp = a.provider.localeCompare(b.provider);
+		if (providerCmp !== 0) return providerCmp;
+		return a.name.localeCompare(b.name);
+	});
+}
+
+function toEntry(model: Model<any>, thinking?: ThinkingLevel): FavouriteModelEntry {
+	return {
+		label: model.name,
+		provider: model.provider,
+		model: model.id,
+		thinking,
+	};
+}
+
+function loadScopedModels(ctx: ExtensionContext): FavouriteModelEntry[] {
+	const settings = SettingsManager.create(ctx.cwd);
+	const patterns = settings.getEnabledModels();
+	const availableModels = ctx.modelRegistry.getAvailable();
+
+	if (!patterns || patterns.length === 0) {
+		return sortAllAvailableModels(availableModels, ctx.model).map((model) => toEntry(model));
+	}
+
+	const resolved: FavouriteModelEntry[] = [];
+	const seen = new Set<string>();
+
+	const pushModel = (model: Model<any>, thinking?: ThinkingLevel) => {
+		const key = `${model.provider}/${model.id}`.toLowerCase();
+		if (seen.has(key)) return;
+		seen.add(key);
+		resolved.push(toEntry(model, thinking));
+	};
+
+	for (const rawPattern of patterns) {
+		const exactFullMatch = findExactModelReferenceMatch(rawPattern, availableModels);
+		if (exactFullMatch) {
+			pushModel(exactFullMatch);
+			continue;
+		}
+
+		let pattern = rawPattern;
+		let thinking: ThinkingLevel | undefined;
+		const colonIndex = rawPattern.lastIndexOf(":");
+		if (colonIndex !== -1) {
+			const maybeThinking = rawPattern.substring(colonIndex + 1);
+			if (isThinkingLevel(maybeThinking)) {
+				thinking = maybeThinking;
+				pattern = rawPattern.substring(0, colonIndex);
+			}
+		}
+
+		const exactMatch = findExactModelReferenceMatch(pattern, availableModels);
+		if (exactMatch) {
+			pushModel(exactMatch, thinking);
+			continue;
+		}
+
+		const matcher = globToRegExp(pattern);
+		const matchingModels = availableModels.filter((model) => {
+			const fullId = `${model.provider}/${model.id}`;
+			return matcher.test(fullId) || matcher.test(model.id);
+		});
+
+		for (const model of matchingModels) {
+			pushModel(model, thinking);
+		}
+	}
+
+	return resolved;
+}
 
 interface PickerResult {
 	fav: FavouriteModelEntry;
@@ -71,25 +238,32 @@ interface PickerResult {
 export async function runFavouriteModels(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
 	if (!ctx.hasUI) return;
 
-	const favourites = loadFavourites();
+	const favourites = loadScopedModels(ctx);
 	if (favourites.length === 0) {
-		ctx.ui.notify("No favourite models configured. Edit favourite-models.json", "warning");
+		ctx.ui.notify("No scoped models available. Use /scoped-models or configure API keys", "warning");
 		return;
 	}
 
 	const currentModel = ctx.model;
 	const currentThinking = pi.getThinkingLevel();
 
-	// Build per-entry thinking indices
 	const thinkingIndices: number[] = favourites.map((fav) => {
-		const idx = fav.thinking ? ALL_THINKING_LEVELS.indexOf(fav.thinking as ThinkingLevel) : -1;
+		const idx = fav.thinking ? ALL_THINKING_LEVELS.indexOf(fav.thinking) : -1;
 		return idx >= 0 ? idx : ALL_THINKING_LEVELS.indexOf(currentThinking);
 	});
 
+	const rows = buildDisplayRows(favourites);
+	const firstModelRow = rows.findIndex((r) => r.type === "model");
+
 	const selected = await ctx.ui.custom<PickerResult | null>(
 		(tui, theme, _kb, done) => {
-			let highlightedIndex = 0;
+			let highlightedIndex = firstModelRow >= 0 ? firstModelRow : 0;
 			const th = theme;
+
+			const getModelIndex = (): number => {
+				const row = rows[highlightedIndex];
+				return row?.type === "model" ? row.modelIndex : -1;
+			};
 
 			return {
 				render: (width: number) => {
@@ -97,12 +271,23 @@ export async function runFavouriteModels(pi: ExtensionAPI, ctx: ExtensionContext
 					const lines: string[] = [];
 
 					lines.push(f.top());
-					lines.push(f.row(th.fg("accent", th.bold("Favourite Models"))));
+					lines.push(f.row(th.fg("accent", th.bold("Scoped Models"))));
 					lines.push(f.separator());
 
-					for (let i = 0; i < favourites.length; i++) {
-						const fav = favourites[i];
+					let modelCounter = 0;
+					for (let i = 0; i < rows.length; i++) {
+						const row = rows[i];
+
+						if (row.type === "header") {
+							const headerText = ` ${row.provider} ${row.count > 0 ? `(${row.count})` : ""} `;
+							const padded = headerText.padEnd(width - 4, "─");
+							lines.push(f.row(th.fg("dim", `──${padded}`)));
+							continue;
+						}
+
+						const fav = row.fav;
 						const isHighlighted = i === highlightedIndex;
+						const mi = row.modelIndex;
 
 						const isCurrent =
 							currentModel?.provider === fav.provider &&
@@ -112,22 +297,23 @@ export async function runFavouriteModels(pi: ExtensionAPI, ctx: ExtensionContext
 							? th.fg("accent", th.bold(fav.label))
 							: th.fg("text", fav.label);
 
-						const providerTag = th.fg("dim", `(${fav.provider})`);
 						const currentBadge = isCurrent ? " " + th.fg("success", "●") : "";
 
-						const thinking = ALL_THINKING_LEVELS[thinkingIndices[i]];
+						const thinking = ALL_THINKING_LEVELS[thinkingIndices[mi]];
 						const thinkingRole = THINKING_ROLES[thinking] ?? "dim";
 						const thinkingTag = isHighlighted
 							? th.fg("dim", "‹") + th.fg(thinkingRole, ` ${thinking} `) + th.fg("dim", "›")
 							: th.fg(thinkingRole, thinking);
 
-						const num = th.fg("dim", `${i + 1}`);
-						const line = `${isHighlighted ? "> " : "  "}${num} ${label} ${providerTag}${currentBadge}  ${thinkingTag}`;
+						const num = modelCounter < 9 ? th.fg("dim", `${modelCounter + 1}`) : th.fg("dim", "·");
+						const line = `${isHighlighted ? "> " : "  "}${num} ${label}${currentBadge}  ${thinkingTag}`;
 						lines.push(f.rowTruncated(line));
+						modelCounter++;
 					}
 
 					lines.push(f.separator());
-					lines.push(f.row(th.fg("dim", "j/k navigate | 1-8 jump | h/l thinking | enter select | esc cancel")));
+					lines.push(f.row(th.fg("dim", "j/k navigate | 1-9 jump | left/right cycle thinking")));
+					lines.push(f.row(th.fg("dim", "o/i/l/m/h/x set thinking | enter select | esc cancel")));
 					lines.push(f.bottom());
 
 					return lines;
@@ -144,47 +330,67 @@ export async function runFavouriteModels(pi: ExtensionAPI, ctx: ExtensionContext
 						return;
 					}
 
-					// Navigate: arrows + vim j/k
-					if (matchesKey(data, "up") || matchesKey(data, Key.ctrl("p")) || data === "k") {
-						highlightedIndex = Math.max(0, highlightedIndex - 1);
+					const key = getPrintableKey(data);
+
+					if (matchesKey(data, "up") || matchesKey(data, Key.ctrl("p")) || key === "k") {
+						highlightedIndex = nextModelRow(rows, highlightedIndex, -1);
 						tui.requestRender();
 						return;
 					}
-					if (matchesKey(data, "down") || matchesKey(data, Key.ctrl("n")) || data === "j") {
-						highlightedIndex = Math.min(favourites.length - 1, highlightedIndex + 1);
+					if (matchesKey(data, "down") || matchesKey(data, Key.ctrl("n")) || key === "j") {
+						highlightedIndex = nextModelRow(rows, highlightedIndex, 1);
 						tui.requestRender();
 						return;
 					}
 
-					// Thinking: arrows + vim h/l
-					if (matchesKey(data, "left") || data === "h") {
-						thinkingIndices[highlightedIndex] = (thinkingIndices[highlightedIndex] - 1 + ALL_THINKING_LEVELS.length) % ALL_THINKING_LEVELS.length;
-						tui.requestRender();
-						return;
-					}
-					if (matchesKey(data, "right") || data === "l") {
-						thinkingIndices[highlightedIndex] = (thinkingIndices[highlightedIndex] + 1) % ALL_THINKING_LEVELS.length;
-						tui.requestRender();
-						return;
-					}
-
-					// Number keys 1-8: jump to entry
-					const num = parseInt(data, 10);
-					if (num >= 1 && num <= favourites.length) {
-						highlightedIndex = num - 1;
-						tui.requestRender();
-						return;
-					}
-
-					// Enter: select highlighted
-					if (matchesKey(data, "enter")) {
-						if (highlightedIndex >= 0 && highlightedIndex < favourites.length) {
-							done({
-								fav: favourites[highlightedIndex],
-								thinking: ALL_THINKING_LEVELS[thinkingIndices[highlightedIndex]],
-							});
+					if (matchesKey(data, "left")) {
+						const mi = getModelIndex();
+						if (mi >= 0) {
+							thinkingIndices[mi] = (thinkingIndices[mi] - 1 + ALL_THINKING_LEVELS.length) % ALL_THINKING_LEVELS.length;
+							tui.requestRender();
 						}
 						return;
+					}
+					if (matchesKey(data, "right")) {
+						const mi = getModelIndex();
+						if (mi >= 0) {
+							thinkingIndices[mi] = (thinkingIndices[mi] + 1) % ALL_THINKING_LEVELS.length;
+							tui.requestRender();
+						}
+						return;
+					}
+
+					if (key) {
+						const num = parseInt(key, 10);
+						const modelCount = rows.filter((r) => r.type === "model").length;
+						if (num >= 1 && num <= Math.min(9, modelCount)) {
+							const target = nthModelRow(rows, num - 1);
+							if (target >= 0) highlightedIndex = target;
+							tui.requestRender();
+							return;
+						}
+					}
+
+					if (key) {
+						const shortcutThinking = THINKING_SHORTCUTS[key];
+						if (shortcutThinking) {
+							const mi = getModelIndex();
+							if (mi >= 0) {
+								thinkingIndices[mi] = ALL_THINKING_LEVELS.indexOf(shortcutThinking);
+								tui.requestRender();
+							}
+							return;
+						}
+					}
+
+					if (matchesKey(data, "enter")) {
+						const row = rows[highlightedIndex];
+						if (row?.type === "model") {
+							done({
+								fav: row.fav,
+								thinking: ALL_THINKING_LEVELS[thinkingIndices[row.modelIndex]],
+							});
+						}
 					}
 				},
 			};
