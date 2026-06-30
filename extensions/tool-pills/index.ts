@@ -1,15 +1,13 @@
 /**
  * Tool Pills + Diff Renderer — combined extension.
  *
- * • ls, read, find, grep, bash → colored pill labels + collapsed output
+ * • ls, read, bash → colored pill labels + collapsed output
  * • write, edit → Shiki-powered syntax-highlighted diffs (from pi-diff)
  */
 
 import type { ExtensionAPI, AgentToolResult, Theme } from "@mariozechner/pi-coding-agent";
 import {
 	createBashToolDefinition,
-	createFindToolDefinition,
-	createGrepToolDefinition,
 	createLsToolDefinition,
 	createReadToolDefinition,
 	highlightCode,
@@ -60,7 +58,7 @@ function renderTextResult(
 	return new Text(`\n${output}\n${hint}`, 0, 0);
 }
 
-/** Helper to register a basic tool (ls, read, find, grep) with pill + collapsed output. */
+/** Helper to register a basic tool (ls, read) with pill + collapsed output. */
 function wrapBasicTool(
 	pi: ExtensionAPI,
 	orig: any,
@@ -100,20 +98,7 @@ export default function (pi: ExtensionAPI) {
 		return t;
 	});
 
-	// find
-	wrapBasicTool(pi, createFindToolDefinition(cwd), "find", (args, theme) => {
-		let t = theme.fg("accent", `"${args.pattern}"`);
-		if (args.path) t += theme.fg("dim", ` in ${args.path}`);
-		return t;
-	});
-
-	// grep
-	wrapBasicTool(pi, createGrepToolDefinition(cwd), "grep", (args, theme) => {
-		let t = theme.fg("accent", `"${args.pattern}"`);
-		if (args.path) t += theme.fg("dim", ` in ${args.path}`);
-		if (args.glob) t += theme.fg("dim", ` ${args.glob}`);
-		return t;
-	});
+	// find + grep: handled by pi-fff extension (SIMD-accelerated, own rendering)
 
 	// bash — special: syntax-highlighted command, tail mode
 	const origBash = createBashToolDefinition(cwd);
