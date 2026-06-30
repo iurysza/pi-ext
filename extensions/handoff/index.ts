@@ -16,7 +16,7 @@
 import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@mariozechner/pi-coding-agent";
 import { convertToLlm } from "@mariozechner/pi-coding-agent";
 import { matchesKey, Key } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 import { join, dirname, resolve } from "node:path";
