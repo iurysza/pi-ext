@@ -124,6 +124,10 @@ Three-mode permission system: `yolo` (everything allowed), `safe` (rule-based ch
 
 Native integration with [cmux](https://github.com/badlogic/cmux). Context-aware notifications via the cmux socket API, sidebar status pills (model, state, thinking, tokens), and custom tools for the model (browser, workspace, notify). Silent no-op when not running inside cmux.
 
+### [Superconductor](extensions/superconductor/)
+
+Native integration with [Superconductor](https://superconductor.dev) via the `sc` CLI. Footer pill with the Superconductor-owned target branch and diff size, a `superconductor_worktree` tool for the model (status, diff, target branch, list/create worktrees), and commands (`/sc-fork`, `/sc-worktree`). Silent no-op when not running inside Superconductor.
+
 ### [Ask User Question](extensions/ask-user-question/)
 
 Registers an `ask_user_question` tool the model uses to ask 1–4 structured clarifying questions (with 2–4 options each) instead of asking in plain text. Interactive UI with optional multi-select and short header labels for a tab bar.

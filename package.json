@@ -33,6 +33,7 @@
       "./extensions/ask-user-question/index.ts",
       "./extensions/tool-pills/index.ts",
       "./extensions/cmux/index.ts",
+      "./extensions/superconductor/index.ts",
       "./extensions/session-snap/index.ts",
       "./extensions/pi-telescope/index.ts",
       "./extensions/handoff/index.ts",
