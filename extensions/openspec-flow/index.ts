@@ -111,6 +111,30 @@ function stageCommand(ctx: ExtensionCommandContext, command: string, hint?: stri
 	if (hint) ctx.ui.notify(hint, "info");
 }
 
+/**
+ * Stage a saved-taskflow invocation. `/tf:<name>` shortcuts are registered only
+ * at session start, so a flow file added mid-session has no command yet — pi
+ * would send the unknown slash command to the model as plain text. In that case
+ * stage the explicit taskflow-tool instruction instead (the tool reads saved
+ * flows from disk live, no registration needed).
+ */
+function stageFlowRun(pi: ExtensionAPI, ctx: ExtensionCommandContext, flowName: string, changeId: string) {
+	const registered = pi.getCommands().some((c) => c.name === `tf:${flowName}`);
+	if (registered) {
+		stageCommand(
+			ctx,
+			`/tf:${flowName} change=${changeId}`,
+			'Enter to run — append verify="..." if this repo needs a different test command',
+		);
+	} else {
+		stageCommand(
+			ctx,
+			`Run the saved taskflow "${flowName}" using the taskflow tool with action="run", name="${flowName}", args={"change":"${changeId}"}.`,
+			`(/tf:${flowName} not registered yet — staged a direct taskflow instruction; /reload or restart pi to get the shortcut)`,
+		);
+	}
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Overlay (leader-key style, two views: change list → actions for the change)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -280,28 +304,16 @@ export default function openspecFlow(pi: ExtensionAPI) {
 			const id = result.change.name;
 			switch (result.key) {
 				case "f":
-					stageCommand(
-						ctx,
-						`/tf:openspec-implement change=${id}`,
-						'Enter to run — append verify="..." if this repo needs a different test command',
-					);
+					stageFlowRun(pi, ctx, "openspec-implement", id);
 					break;
 				case "g":
-					stageCommand(
-						ctx,
-						`/tf:openspec-implement-loop change=${id}`,
-						'Enter to run — append verify="..." if this repo needs a different test command',
-					);
+					stageFlowRun(pi, ctx, "openspec-implement-loop", id);
 					break;
 				case "i":
 					stageCommand(ctx, `/opsx-apply ${id}`, "Enter to implement interactively — run the gate panel (p in /spec) afterwards");
 					break;
 				case "p":
-					stageCommand(
-						ctx,
-						`/tf:openspec-review change=${id}`,
-						'Enter to run gates only — append verify="..." if this repo needs a different test command',
-					);
+					stageFlowRun(pi, ctx, "openspec-review", id);
 					break;
 				case "r":
 					stageCommand(ctx, "/plannotator-review", "Enter to open the plannotator review UI");
