@@ -1,13 +1,13 @@
 {
   "name": "openspec-implement",
-  "description": "Implement an OpenSpec change end-to-end: apply tasks, run build/test, 2-models-per-angle review panel, arbiter gate with self-healing rework.",
+  "description": "Implement an OpenSpec change end-to-end: apply tasks, run build/test, 2-models-per-angle review panel, arbiter verdict, then an informed fix round that reads the full verdict.",
   "strictInterpolation": true,
   "budget": { "maxUSD": 10.00 },
   "args": {
     "change": { "description": "OpenSpec change id under openspec/changes/<id>" },
     "verify": {
       "default": "npm run test:pi-sem 2>&1 | tail -30",
-      "description": "Shell command for the build/test gate. Non-zero exit fails the phase. Default suits pi-ext; override per project, e.g. verify='npx tsc --noEmit && npm test'."
+      "description": "Shell command for the build/test gate. Default suits pi-ext; override per project, e.g. verify='npx tsc --noEmit && npm test'."
     }
   },
   "phases": [
@@ -39,7 +39,7 @@
       "id": "spec-validate",
       "type": "script",
       "dependsOn": ["implement"],
-      "run": ["openspec", "validate", "{args.change}", "--strict"]
+      "run": ["sh", "-c", "openspec validate {args.change} --strict 2>&1; echo VALIDATE_EXIT=$?; exit 0"]
     },
     {
       "id": "diff",
@@ -116,26 +116,42 @@
       "task": "Security review of this change. Optimize for PRECISION — report only findings you are confident are real and exploitable; classify each by OWASP category.\n\nWorking-tree diff (untracked files appear only in the status list — read those files yourself):\n{steps.diff.output}\n\nHunt for: command/shell injection, unsafe eval/exec, path traversal, secret or credential leaks, missing input validation, authorization gaps (IDOR), unsafe defaults, and data exposure.\n\nOutput a numbered list of findings, each tagged [blocker], [major], or [minor]. If clean, output exactly: No findings."
     },
     {
-      "id": "spec-gate",
-      "type": "gate",
+      "id": "verdict",
+      "type": "agent",
       "agent": "final-arbiter",
       "model": "openai-codex/gpt-5.5",
-      "dependsOn": ["implement", "build-test", "spec-validate", "diff", "review-spec-claude", "review-spec-sonnet", "review-kiss-gpt", "review-kiss-glm", "review-sec-claude", "review-sec-gpt"],
-      "onBlock": "retry",
-      "retry": { "max": 2, "backoffMs": 0 },
+      "dependsOn": ["build-test", "spec-validate", "diff", "review-spec-claude", "review-spec-sonnet", "review-kiss-gpt", "review-kiss-glm", "review-sec-claude", "review-sec-gpt"],
       "context": [
         "openspec/changes/{args.change}/proposal.md",
         "openspec/changes/{args.change}/tasks.md"
       ],
-      "task": "You are the final arbiter for OpenSpec change `{args.change}`. Consolidate the evidence below and decide. Reviewer findings are claims, not facts — weigh them against the diff; confident-sounding findings can be wrong.\n\nBuild/test output (ends with VERIFY_EXIT=<code>; non-zero means tests failed):\n{steps.build-test.output}\n\nSpec validation:\n{steps.spec-validate.output}\n\nDiff:\n{steps.diff.output}\n\nSpec-compliance review (Claude):\n{steps.review-spec-claude.output}\n\nSpec-compliance review (Sonnet):\n{steps.review-spec-sonnet.output}\n\nSimplicity review (GPT):\n{steps.review-kiss-gpt.output}\n\nSimplicity review (GLM):\n{steps.review-kiss-glm.output}\n\nSecurity review (Claude, recall-tuned):\n{steps.review-sec-claude.output}\n\nSecurity review (GPT, precision-tuned):\n{steps.review-sec-gpt.output}\n\nRules:\n- An empty review section means that reviewer was skipped — note it in your verdict text, do not treat silence as approval, but do not block solely because an optional review is missing.\n- Where the two reviewers of one angle disagree, adjudicate explicitly against the diff and say which one you believe and why.\n- VERIFY_EXIT non-zero MUST result in BLOCK. Also block on any confirmed [blocker] finding, on unimplemented requirements, or on tests weakened to pass. Use judgment on [major]/[minor] — cite why you accept or reject each.\n\nEnd with exactly `VERDICT: PASS`, or `VERDICT: BLOCK` followed by a precise numbered fix list (this feeds the next implement round). If uncertain, BLOCK."
+      "task": "You are the final arbiter for OpenSpec change `{args.change}`. Consolidate the evidence below into ONE report. Reviewer findings are claims, not facts — weigh them against the diff; confident-sounding findings can be wrong.\n\nBuild/test output (ends with VERIFY_EXIT=<code>; non-zero means tests failed):\n{steps.build-test.output}\n\nSpec validation (ends with VALIDATE_EXIT=<code>):\n{steps.spec-validate.output}\n\nDiff:\n{steps.diff.output}\n\nSpec-compliance review (Claude):\n{steps.review-spec-claude.output}\n\nSpec-compliance review (Sonnet):\n{steps.review-spec-sonnet.output}\n\nSimplicity review (GPT):\n{steps.review-kiss-gpt.output}\n\nSimplicity review (GLM):\n{steps.review-kiss-glm.output}\n\nSecurity review (Claude, recall-tuned):\n{steps.review-sec-claude.output}\n\nSecurity review (GPT, precision-tuned):\n{steps.review-sec-gpt.output}\n\nRules:\n- An empty review section means that reviewer was skipped — note it, do not treat silence as approval.\n- Where the two reviewers of one angle disagree, adjudicate explicitly against the diff and say which one you believe and why.\n- VERIFY_EXIT or VALIDATE_EXIT non-zero MUST result in BLOCK. Also block on any confirmed [blocker] finding, on unimplemented requirements, or on tests weakened to pass. Use judgment on [major]/[minor] — cite why you accept or reject each.\n\nStructure: verdict first, then confirmed findings (with file:line), then rejected findings with one-line reasons, then skipped reviewers. End with exactly `VERDICT: PASS`, or `VERDICT: BLOCK` followed by a precise numbered fix list. If uncertain, BLOCK."
+    },
+    {
+      "id": "fix",
+      "type": "agent",
+      "agent": "executor-code",
+      "dependsOn": ["verdict"],
+      "context": [
+        "openspec/changes/{args.change}/proposal.md",
+        "openspec/changes/{args.change}/tasks.md"
+      ],
+      "task": "You are the fix stage for OpenSpec change `{args.change}`.\n\nArbiter verdict:\n{steps.verdict.output}\n\nIf the verdict ends with `VERDICT: PASS`: change NOTHING and output exactly: NOTHING_TO_FIX.\n\nOtherwise: fix every item in the numbered fix list in the working tree. Keep diffs minimal and scoped to the findings. Never weaken or delete tests to make them pass — if you believe a finding is wrong, do not 'fix' it; dispute it in your output instead. Run `{args.verify}` and iterate until it passes.\n\nOutput a numbered list of the fixes you applied (with file:line), plus any findings you dispute and why."
+    },
+    {
+      "id": "recheck",
+      "type": "script",
+      "dependsOn": ["fix"],
+      "run": ["bash", "-c", "set -o pipefail; ({args.verify}); code=$?; echo; echo VERIFY_EXIT=$code; echo '--- working tree ---'; git status --short; exit 0"],
+      "timeout": 300000
     },
     {
       "id": "summary",
       "type": "agent",
       "agent": "doc-writer",
-      "dependsOn": ["spec-gate"],
+      "dependsOn": ["verdict", "fix", "recheck"],
       "final": true,
-      "task": "Summarize the implementation of `{args.change}` for a human reviewer:\n{steps.spec-gate.output}\n\nCover: what was built, the arbiter verdict, notable review findings (including any skipped reviewers), and remaining follow-ups. If everything passed, end with the exact next steps: `/plannotator-review` for a human look at the diff, then `openspec archive {args.change}`."
+      "task": "Summarize the implementation of `{args.change}` for a human reviewer.\n\nArbiter verdict:\n{steps.verdict.output}\n\nFix stage output:\n{steps.fix.output}\n\nRe-check after fixes (VERIFY_EXIT=0 means tests pass):\n{steps.recheck.output}\n\nCover: what was built, the verdict, fixes applied (or none), disputed findings, skipped reviewers, remaining follow-ups. If fixes were applied, recommend re-running `/tf:openspec-review change={args.change}` for a fresh panel pass. If everything passed, end with the exact next steps: `/plannotator-review` for a human look at the diff, then `openspec archive {args.change}`."
     }
   ]
 }

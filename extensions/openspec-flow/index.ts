@@ -57,12 +57,12 @@ function buildActions(change: OpenSpecChange): SpecAction[] {
 			{
 				key: "f",
 				label: `Implement — full change${smallChange ? "  (recommended)" : ""}`,
-				description: "background agent implements everything, then tests + 6-reviewer panel + verdict",
+				description: "background agent implements everything, then tests + 6-reviewer panel + verdict + informed fix round",
 			},
 			{
 				key: "g",
 				label: `Implement — group loop${smallChange ? "" : "  (recommended)"}`,
-				description: "fresh agent per task group (## sections in tasks.md), same tests + panel + verdict",
+				description: "fresh agent per task group (## sections in tasks.md), same tests + panel + verdict + fix round",
 			},
 			{
 				key: "i",
@@ -75,7 +75,7 @@ function buildActions(change: OpenSpecChange): SpecAction[] {
 		{
 			key: "p",
 			label: "Review — gate panel",
-			description: "tests + 6-reviewer panel + arbiter verdict on the current working tree, no implementation",
+			description: "tests + 6-reviewer panel + arbiter verdict + fix round on the current working tree",
 		},
 		{
 			key: "r",

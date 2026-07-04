@@ -41,9 +41,10 @@ fall back to your Pi default model (Opus 4.8 here) when roles are unset.
 2. **Implement** — `/tf:openspec-implement change=<id>` (or the per-group
    `/tf:openspec-implement-loop`). taskflow implements the tasks, runs your
    build/test command, validates the spec, fans out a **multi-angle, multi-model
-   review panel**, and runs an arbiter gate that re-runs implementation on
-   `BLOCK` (self-healing). Only the final summary returns to your context —
-   intermediate transcripts stay in the runtime.
+   review panel**, consolidates it into an arbiter verdict, and on `BLOCK` a
+   **fix agent reads the full verdict**, repairs the findings, and re-checks.
+   Only the final summary returns to your context — intermediate transcripts
+   stay in the runtime.
 
 3. **Human review** — `/plannotator-review` opens the working-tree diff in
    plannotator's code-review UI: annotate lines, switch diff views, send feedback
@@ -59,10 +60,10 @@ Both live in `.pi/taskflows/` and take the same args.
 
 | | `openspec-implement` | `openspec-implement-loop` |
 |---|---|---|
-| Shape | One `implement` phase for the whole change, then review panel + arbiter gate with self-healing retry (≤2 rounds) | One task **group** per iteration (`## N.` sections in tasks.md), **fresh context each group**, then review panel + arbiter gate — 80 tasks in 10 groups = 10 agents, not 80 |
+| Shape | One `implement` phase for the whole change, then panel → verdict → informed fix round → re-check | One task **group** per iteration (`## N.` sections in tasks.md), **fresh context each group**, then the same panel → verdict → fix tail — 80 tasks in 10 groups = 10 agents, not 80 |
 | Best for | Small/medium changes (a handful of tasks) | Large multi-task changes where one context would degrade |
 | Cost cap | `budget.maxUSD: 10` | `budget.maxUSD: 15` |
-| Mechanism | Archetype 2 (self-healing implement→verify→rework) | `loop` + `reflexion` (each round sees why the last fell short) |
+| Mechanism | verdict→fix chain (the fix agent receives the arbiter's full report via `{steps.verdict.output}`) | `loop` + `reflexion` for the implement stage (each round sees why the last fell short), then the same verdict→fix chain |
 
 **Args (both):**
 
@@ -91,11 +92,16 @@ implement / task-loop  (executor-code — reads proposal, design, tasks, spec de
 (Opus+Sonnet)  (GPT+GLM)     (Opus recall + GPT precision)
       └─────────┼──────────────┘
                 │
-spec-gate / acceptance-gate  (final-arbiter — consolidates all evidence,
-      │                       VERDICT: PASS/BLOCK)
-      │   └─ on BLOCK: re-runs implement + panel (≤2 rounds)
+verdict  (final-arbiter — consolidates all evidence into ONE report,
+      │   ends with VERDICT: PASS/BLOCK + numbered fix list)
       │
-summary  (doc-writer — final; suggests /plannotator-review + openspec archive)
+fix      (executor-code — reads the FULL verdict; on PASS touches nothing,
+      │   on BLOCK repairs every listed finding and runs verify until green)
+      │
+recheck  (script: verify again + git status)
+      │
+summary  (doc-writer — final; suggests /plannotator-review + openspec archive,
+          or a fresh /tf:openspec-review pass if fixes were applied)
 ```
 
 ### Review panel (multi-angle, two models per angle)
@@ -114,7 +120,8 @@ different precision/recall profiles.
 | `review-kiss-glm` | KISS/YAGNI/DRY (second opinion) | `zai/glm-5.2` | decisive, concise, front-loads hard calls; ~1/6 frontier cost; #1 open-weights model |
 | `review-sec-claude` | security, recall-tuned | `anthropic/claude-opus-4-8` | best recall + cross-file reasoning (Anthropic 0-day work: 500+ validated OSS vulns); prompt says "optimize for recall" |
 | `review-sec-gpt` | security, precision-tuned | `openai-codex/gpt-5.5` | lowest false-positive rate of the frontier (15% vs Opus 36% white-box FPR); prompt says "optimize for precision" — the pair is the detect-then-verify pattern every source converges on |
-| `spec-gate` | arbiter — consolidates all six reviews + build/test + diff | `openai-codex/gpt-5.5` | best resistance to confident-but-wrong assertions (PARROT: 4% capitulation vs ~11% Claude), low sycophancy at high decisiveness, strict verdict-format compliance — critical because taskflow gates **fail open** on an ambiguous verdict |
+| `verdict` | arbiter — consolidates all six reviews + build/test + diff into one report | `openai-codex/gpt-5.5` | best resistance to confident-but-wrong assertions (PARROT: 4% capitulation vs ~11% Claude), low sycophancy at high decisiveness, strict verdict-format compliance — the fix stage keys off the final `VERDICT:` line |
+| `fix` | reads the full verdict; repairs confirmed findings, disputes wrong ones, no-op on PASS | pi default (Opus) | needs write access and the same caliber as the implementer; the verdict text is its complete work order |
 
 Kimi K2.7 was dropped from the panel entirely: last place in the one
 independent review eval it appeared in, documented lineage sycophancy, no
@@ -126,8 +133,15 @@ Notes:
   (`provider/model-id` form; the model must work in your pi setup — check
   providers in `~/.pi/agent/auth.json` and `enabledModels` in settings).
 - **Adding an angle** (dry, srp, docs, …): copy one `review-*` phase, change the
-  id/task/model, and add the new id to the gate's `dependsOn` plus a
-  `{steps.<id>.output}` section in the gate task.
+  id/task/model, and add the new id to the verdict phase's `dependsOn` plus a
+  `{steps.<id>.output}` section in the verdict task.
+- **Why no taskflow `gate` + `onBlock: retry`?** Verified in taskflow-core
+  0.1.5's runtime: on BLOCK the gate re-runs its upstream phases with their
+  **original prompts** — the block reasons are *not* injected (the skill docs'
+  "re-interpolation" claim has no implementation). A blind re-run of an
+  implement phase whose tasks are all checked off is a no-op, so gate-retry
+  would just re-bill the panel for nothing. The verdict→fix chain passes
+  feedback explicitly through `{steps.verdict.output}` — by construction.
 - Review phases are `optional: true` and read-only (`tools: read/grep/ls`): a
   missing/failing model degrades to a skipped review instead of killing the run.
   The arbiter is told to flag skipped reviews, not treat silence as approval,
@@ -156,7 +170,7 @@ offers plannotator review, validation, and (for completed changes) archiving.
 | `/opsx-archive` | Archive a completed change |
 | `/tf:openspec-implement change=<id> [verify="…"]` | Gated implement, whole-change |
 | `/tf:openspec-implement-loop change=<id> [verify="…"]` | Gated implement, one task group at a time |
-| `/tf:openspec-review change=<id> [verify="…"]` | Gates only: tests + panel + verdict on current working tree |
+| `/tf:openspec-review change=<id> [verify="…"]` | Gates + fix: tests + panel + verdict + informed fix round on current working tree |
 | `/plannotator-review` | Human code-review UI over current git changes (before archive) |
 | `/tf verify` | Static-check a flow (cycles, refs, contracts) — zero tokens |
 | `/tf runs` / `/tf resume <runId>` | List runs / resume a paused or failed run |
@@ -174,19 +188,21 @@ offers plannotator review, validation, and (for completed changes) archiving.
   standalone gate flow doesn't depend on session state at all.
 - **Normal change, want it verified unattended** → `/tf:openspec-implement`.
 - **Large change, many tasks** → `/tf:openspec-implement-loop`.
-- **Gates only, no implementation** → `/tf:openspec-review` (`p` in `/spec`):
-  tests + spec validation + the same 6-reviewer panel + arbiter, run against the
-  current working tree. Always completes with a full report (failing tests are a
-  finding for the arbiter, not a reason to abort the review).
+- **Gates + fix, no implementation** → `/tf:openspec-review` (`p` in `/spec`):
+  tests + spec validation + the same 6-reviewer panel + arbiter verdict against
+  the current working tree, then a fix agent repairs confirmed findings (reading
+  the full verdict) and re-checks. On a clean PASS nothing is touched. Failing
+  tests are a finding for the arbiter, not a reason to abort. For another full
+  panel pass after fixes, just run it again.
 
 ## Notes & gotchas
 
 - **`verify` default fails on repos without `test:pi-sem`.** It's set for this
   repo. On any other project, pass `verify=` or edit the flow's arg default.
-- **Gates fail open on ambiguity** — an unparseable verdict is treated as PASS.
-  The gate prompts demand an explicit `VERDICT: PASS/BLOCK` and say "if uncertain,
-  BLOCK" to counter this. A false PASS is the one genuinely costly failure mode
-  here; everything else just costs a retry.
+- **The verdict must end with an explicit `VERDICT:` line** — the fix stage keys
+  off it (a report without it reads as nothing-to-fix). The arbiter prompt
+  demands it and says "if uncertain, BLOCK". A false PASS is the one genuinely
+  costly failure mode here; everything else just costs another run.
 - **The implement prompt forbids weakening tests** and tells the agent to *stop
   and report* a genuine spec gap rather than silently invent behavior — so the
   spec stays the source of truth, not post-hoc documentation.
