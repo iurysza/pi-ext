@@ -1,0 +1,67 @@
+{
+  "name": "openspec-implement",
+  "description": "Implement an OpenSpec change end-to-end: apply tasks, run build/test, gate against acceptance criteria with self-healing rework.",
+  "strictInterpolation": true,
+  "budget": { "maxUSD": 5.00 },
+  "args": {
+    "change": { "description": "OpenSpec change id under openspec/changes/<id>" },
+    "verify": {
+      "default": "npm run test:pi-sem 2>&1 | tail -30",
+      "description": "Shell command for the build/test gate. Non-zero exit fails the phase. Default suits pi-ext; override per project, e.g. verify='npx tsc --noEmit && npm test'."
+    }
+  },
+  "phases": [
+    {
+      "id": "load",
+      "type": "script",
+      "run": ["openspec", "instructions", "apply", "--change", "{args.change}", "--json"]
+    },
+    {
+      "id": "implement",
+      "type": "agent",
+      "agent": "executor-code",
+      "dependsOn": ["load"],
+      "context": [
+        "openspec/changes/{args.change}/proposal.md",
+        "openspec/changes/{args.change}/design.md",
+        "openspec/changes/{args.change}/tasks.md"
+      ],
+      "task": "Implement OpenSpec change `{args.change}`.\n\nApply-phase state (context files + pending tasks + progress) as JSON:\n{steps.load.output}\n\nRules:\n- Read the proposal, design, spec deltas, and tasks (some are pre-loaded above; read the delta specs under openspec/changes/{args.change}/specs/ yourself).\n- Work through the PENDING tasks in openspec/changes/{args.change}/tasks.md in order. Keep each change minimal and scoped to its task.\n- Immediately after finishing a task, flip its checkbox `- [ ]` -> `- [x]` in tasks.md.\n- If the spec has a genuine gap or contradiction, DO NOT silently invent behavior — stop and report the blocker in your output. Do not weaken or delete tests to make them pass.\n- Do not run tests yourself; the next phase does that."
+    },
+    {
+      "id": "build-test",
+      "type": "script",
+      "dependsOn": ["implement"],
+      "run": ["sh", "-c", "{args.verify}"],
+      "timeout": 300000
+    },
+    {
+      "id": "spec-validate",
+      "type": "script",
+      "dependsOn": ["implement"],
+      "run": ["openspec", "validate", "{args.change}", "--strict"]
+    },
+    {
+      "id": "spec-gate",
+      "type": "gate",
+      "agent": "reviewer",
+      "dependsOn": ["implement", "build-test", "spec-validate"],
+      "onBlock": "retry",
+      "retry": { "max": 2, "backoffMs": 0 },
+      "context": [
+        "openspec/changes/{args.change}/proposal.md",
+        "openspec/changes/{args.change}/tasks.md"
+      ],
+      "eval": ["{steps.spec-validate.output} contains valid"],
+      "task": "Review the working tree against OpenSpec change `{args.change}`.\n\nBuild/test output:\n{steps.build-test.output}\n\nCheck, citing evidence (file:line) for each:\n1. Is every requirement and scenario in the change's spec deltas actually implemented?\n2. Are all tasks in tasks.md checked off `- [x]`?\n3. Do build/test pass, and were no tests weakened/deleted to get there?\n\nEnd with exactly `VERDICT: PASS` if all three hold, or `VERDICT: BLOCK` followed by a precise, numbered list of what to fix (this feeds the next implement round). If uncertain, BLOCK."
+    },
+    {
+      "id": "summary",
+      "type": "agent",
+      "agent": "doc-writer",
+      "dependsOn": ["spec-gate"],
+      "final": true,
+      "task": "Summarize the implementation of `{args.change}` for a human reviewer:\n{steps.spec-gate.output}\n\nCover: what was built, gate verdict, any remaining follow-ups. If everything passed, end with the exact next step: `openspec archive {args.change}`."
+    }
+  ]
+}
