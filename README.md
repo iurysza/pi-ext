@@ -134,7 +134,7 @@ Registers an `ask_user_question` tool the model uses to ask 1–4 structured cla
 
 ### [OpenSpec Flow](extensions/openspec-flow/)
 
-`/spec` fronts the spec-driven workflow (see [WORKFLOWS.md](WORKFLOWS.md)): pick an OpenSpec change with task progress, then implement it via the gated taskflow (whole-change or per-task loop, recommended by change size), implement interactively via `/opsx-apply`, open plannotator review, validate, or archive. Stages commands in the editor so args like `verify="…"` can be tweaked before running.
+`/spec` fronts the spec-driven workflow (see [WORKFLOWS.md](WORKFLOWS.md)): pick an OpenSpec change with task progress, then implement it via the gated taskflow (whole-change or per-group loop, recommended by change size), implement interactively via `/opsx-apply`, open plannotator review, validate, or archive. Stages commands in the editor so args like `verify="…"` can be tweaked before running.
 
 ## Skills
 

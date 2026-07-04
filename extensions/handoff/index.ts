@@ -27,7 +27,7 @@ import { THINKING_ROLES } from "../shared/thinking-colors.js";
 import { normalize } from "@sting8k/pi-vcc/src/core/normalize";
 import { filterNoise } from "@sting8k/pi-vcc/src/core/filter-noise";
 import { buildSections } from "@sting8k/pi-vcc/src/core/build-sections";
-import { redact } from "@sting8k/pi-vcc/src/core/redact";
+import { sanitize } from "@sting8k/pi-vcc/src/core/sanitize";
 import { TaskStore } from "@tintinweb/pi-tasks/src/task-store.js";
 
 function shellQuote(value: string): string {
@@ -255,7 +255,7 @@ function buildContextSummary(ctx: ExtensionContext): string | null {
 		"Do not redo work already completed. Use `session_query` on the parent session if you need more details.",
 	);
 
-	return redact(parts.join("\n\n---\n\n"));
+	return sanitize(parts.join("\n\n---\n\n"));
 }
 
 // ── Language detection word lists ──

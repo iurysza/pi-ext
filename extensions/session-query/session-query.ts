@@ -31,7 +31,7 @@ import { Type } from "typebox";
 import { normalize } from "@sting8k/pi-vcc/src/core/normalize";
 import { filterNoise } from "@sting8k/pi-vcc/src/core/filter-noise";
 import { buildSections } from "@sting8k/pi-vcc/src/core/build-sections";
-import { redact } from "@sting8k/pi-vcc/src/core/redact";
+import { sanitize } from "@sting8k/pi-vcc/src/core/sanitize";
 
 const QUERY_SYSTEM_PROMPT = `You are a session context assistant. Given a session transcript and a question, provide a concise answer based on the session contents.
 
@@ -74,7 +74,7 @@ function buildUncappedSummary(llmMessages: Message[]): string {
 	if (data.briefTranscript) parts.push(data.briefTranscript);
 
 	if (parts.length === 0) return "";
-	return redact(parts.join("\n\n---\n\n"));
+	return sanitize(parts.join("\n\n---\n\n"));
 }
 
 function getOrBuildSummary(sessionPath: string, llmMessages: Message[]): string {

@@ -38,7 +38,7 @@ fall back to your Pi default model (Opus 4.8 here) when roles are unset.
    picks a kebab-case id (e.g. `add-foo-command`) and reports it. `openspec list`
    shows all active changes with task progress if you forget.
 
-2. **Implement** — `/tf:openspec-implement change=<id>` (or the per-task
+2. **Implement** — `/tf:openspec-implement change=<id>` (or the per-group
    `/tf:openspec-implement-loop`). taskflow implements the tasks, runs your
    build/test command, validates the spec, fans out a **multi-angle, multi-model
    review panel**, and runs an arbiter gate that re-runs implementation on
@@ -59,7 +59,7 @@ Both live in `.pi/taskflows/` and take the same args.
 
 | | `openspec-implement` | `openspec-implement-loop` |
 |---|---|---|
-| Shape | One `implement` phase for the whole change, then review panel + arbiter gate with self-healing retry (≤2 rounds) | One task per iteration, **fresh context each time**, then review panel + arbiter gate |
+| Shape | One `implement` phase for the whole change, then review panel + arbiter gate with self-healing retry (≤2 rounds) | One task **group** per iteration (`## N.` sections in tasks.md), **fresh context each group**, then review panel + arbiter gate — 80 tasks in 10 groups = 10 agents, not 80 |
 | Best for | Small/medium changes (a handful of tasks) | Large multi-task changes where one context would degrade |
 | Cost cap | `budget.maxUSD: 10` | `budget.maxUSD: 15` |
 | Mechanism | Archetype 2 (self-healing implement→verify→rework) | `loop` + `reflexion` (each round sees why the last fell short) |
@@ -142,7 +142,7 @@ Notes:
 **Start with `/spec`** — the `openspec-flow` extension (this repo,
 `extensions/openspec-flow/`) fronts the whole pipeline: it lists changes with
 task progress, recommends the right implement flow by change size (≤4 tasks →
-whole-change, more → per-task loop), and stages the chosen command in the
+whole-change, more → per-group loop), and stages the chosen command in the
 editor so you can tweak args (e.g. `verify="…"`) before pressing Enter. It also
 offers plannotator review, validation, and (for completed changes) archiving.
 
@@ -155,7 +155,7 @@ offers plannotator review, validation, and (for completed changes) archiving.
 | `/opsx-sync` | Sync spec deltas into main specs |
 | `/opsx-archive` | Archive a completed change |
 | `/tf:openspec-implement change=<id> [verify="…"]` | Gated implement, whole-change |
-| `/tf:openspec-implement-loop change=<id> [verify="…"]` | Gated implement, one task at a time |
+| `/tf:openspec-implement-loop change=<id> [verify="…"]` | Gated implement, one task group at a time |
 | `/plannotator-review` | Human code-review UI over current git changes (before archive) |
 | `/tf verify` | Static-check a flow (cycles, refs, contracts) — zero tokens |
 | `/tf runs` / `/tf resume <runId>` | List runs / resume a paused or failed run |
