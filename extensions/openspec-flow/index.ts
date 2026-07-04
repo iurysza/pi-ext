@@ -73,6 +73,11 @@ function buildActions(change: OpenSpecChange): SpecAction[] {
 	}
 	actions.push(
 		{
+			key: "p",
+			label: "Review — gate panel",
+			description: "tests + 6-reviewer panel + arbiter verdict on the current working tree, no implementation",
+		},
+		{
 			key: "r",
 			label: "Review diff — plannotator",
 			description: "browser UI over current git changes, annotate lines, send feedback",
@@ -289,7 +294,14 @@ export default function openspecFlow(pi: ExtensionAPI) {
 					);
 					break;
 				case "i":
-					stageCommand(ctx, `/opsx-apply ${id}`, "Enter to implement interactively in this session");
+					stageCommand(ctx, `/opsx-apply ${id}`, "Enter to implement interactively — run the gate panel (p in /spec) afterwards");
+					break;
+				case "p":
+					stageCommand(
+						ctx,
+						`/tf:openspec-review change=${id}`,
+						'Enter to run gates only — append verify="..." if this repo needs a different test command',
+					);
 					break;
 				case "r":
 					stageCommand(ctx, "/plannotator-review", "Enter to open the plannotator review UI");

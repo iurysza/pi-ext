@@ -156,6 +156,7 @@ offers plannotator review, validation, and (for completed changes) archiving.
 | `/opsx-archive` | Archive a completed change |
 | `/tf:openspec-implement change=<id> [verify="…"]` | Gated implement, whole-change |
 | `/tf:openspec-implement-loop change=<id> [verify="…"]` | Gated implement, one task group at a time |
+| `/tf:openspec-review change=<id> [verify="…"]` | Gates only: tests + panel + verdict on current working tree |
 | `/plannotator-review` | Human code-review UI over current git changes (before archive) |
 | `/tf verify` | Static-check a flow (cycles, refs, contracts) — zero tokens |
 | `/tf runs` / `/tf resume <runId>` | List runs / resume a paused or failed run |
@@ -167,9 +168,16 @@ offers plannotator review, validation, and (for completed changes) archiving.
 ## When to use which
 
 - **Tiny change, want to watch it live** → `/opsx-apply` in the session. No flow
-  overhead, you can steer mid-stream.
+  overhead, you can steer mid-stream. **Then run `/tf:openspec-review`** — an
+  interactive session can get compacted mid-implementation, and whatever
+  validation diligence lived in that context silently disappears with it. The
+  standalone gate flow doesn't depend on session state at all.
 - **Normal change, want it verified unattended** → `/tf:openspec-implement`.
 - **Large change, many tasks** → `/tf:openspec-implement-loop`.
+- **Gates only, no implementation** → `/tf:openspec-review` (`p` in `/spec`):
+  tests + spec validation + the same 6-reviewer panel + arbiter, run against the
+  current working tree. Always completes with a full report (failing tests are a
+  finding for the arbiter, not a reason to abort the review).
 
 ## Notes & gotchas
 
