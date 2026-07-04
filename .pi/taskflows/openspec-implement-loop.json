@@ -258,7 +258,7 @@
         "recheck"
       ],
       "final": true,
-      "task": "Summarize the implementation of `{args.change}` for a human reviewer.\n\nArbiter verdict:\n{steps.verdict.output}\n\nFix stage output:\n{steps.fix.output}\n\nRe-check after fixes (VERIFY_EXIT=0 means tests pass):\n{steps.recheck.output}\n\nCover: what was built, the verdict, fixes applied (or none), disputed findings, skipped reviewers, remaining follow-ups. If fixes were applied, recommend re-running `/tf:openspec-review change={args.change}` for a fresh panel pass. If everything passed, end with the exact next steps: `/plannotator-review` for a human look at the diff, then `openspec archive {args.change}`."
+      "task": "Summarize the implementation of `{args.change}` for a human reviewer. WRITE THE SUMMARY IN CZECH (čeština) — it is the only output the human reads. Keep file paths, code identifiers, command names, and the `VERDICT:` line in English.\n\nArbiter verdict:\n{steps.verdict.output}\n\nFix stage output:\n{steps.fix.output}\n\nRe-check after fixes (VERIFY_EXIT=0 means tests pass):\n{steps.recheck.output}\n\nCover: what was built, the verdict, fixes applied (or none), disputed findings, skipped reviewers, remaining follow-ups. If fixes were applied, recommend re-running `/tf:openspec-review change={args.change}` for a fresh panel pass. If everything passed, end with the exact next steps: `/plannotator-review` for a human look at the diff, then `openspec archive {args.change}`."
     }
   ]
 }

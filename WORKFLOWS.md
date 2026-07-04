@@ -212,6 +212,10 @@ offers plannotator review, validation, and (for completed changes) archiving.
 
 - **`verify` default fails on repos without `test:pi-sem`.** It's set for this
   repo. On any other project, pass `verify=` or edit the flow's arg default.
+- **Final summaries are written in Czech** — the `summary` phase is the only
+  output that reaches the human, so it's in Czech; the whole internal pipeline
+  (reviewer findings, verdict, fix outputs) stays in English, as do file paths,
+  identifiers, and the `VERDICT:` line.
 - **The verdict must end with an explicit `VERDICT:` line** — the fix stage keys
   off it (a report without it reads as nothing-to-fix). The arbiter prompt
   demands it and says "if uncertain, BLOCK". A false PASS is the one genuinely
