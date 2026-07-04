@@ -132,6 +132,10 @@ Native integration with [Superconductor](https://superconductor.dev) via the `sc
 
 Registers an `ask_user_question` tool the model uses to ask 1–4 structured clarifying questions (with 2–4 options each) instead of asking in plain text. Interactive UI with optional multi-select and short header labels for a tab bar.
 
+### [OpenSpec Flow](extensions/openspec-flow/)
+
+`/spec` fronts the spec-driven workflow (see [WORKFLOWS.md](WORKFLOWS.md)): pick an OpenSpec change with task progress, then implement it via the gated taskflow (whole-change or per-task loop, recommended by change size), implement interactively via `/opsx-apply`, open plannotator review, validate, or archive. Stages commands in the editor so args like `verify="…"` can be tweaked before running.
+
 ## Skills
 
 | Skill | Description |

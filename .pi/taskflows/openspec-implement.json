@@ -62,10 +62,10 @@
       "task": "Spec-compliance review of OpenSpec change `{args.change}`.\n\nWorking-tree diff (untracked files appear only in the status list — read those files yourself):\n{steps.diff.output}\n\nFor EVERY requirement and scenario in the delta specs under openspec/changes/{args.change}/specs/, verify there is implementation evidence (cite file:line). Also check every task in tasks.md is genuinely done, not just checked off.\n\nOutput a numbered list of findings, each tagged [blocker], [major], or [minor]. If fully compliant, output exactly: No findings."
     },
     {
-      "id": "review-spec-gemini",
+      "id": "review-spec-sonnet",
       "type": "agent",
       "agent": "reviewer",
-      "model": "github-copilot/gemini-3.1-pro-preview",
+      "model": "anthropic/claude-sonnet-5",
       "tools": ["read", "grep", "ls"],
       "optional": true,
       "dependsOn": ["diff"],
@@ -120,14 +120,14 @@
       "type": "gate",
       "agent": "final-arbiter",
       "model": "openai-codex/gpt-5.5",
-      "dependsOn": ["implement", "build-test", "spec-validate", "diff", "review-spec-claude", "review-spec-gemini", "review-kiss-gpt", "review-kiss-glm", "review-sec-claude", "review-sec-gpt"],
+      "dependsOn": ["implement", "build-test", "spec-validate", "diff", "review-spec-claude", "review-spec-sonnet", "review-kiss-gpt", "review-kiss-glm", "review-sec-claude", "review-sec-gpt"],
       "onBlock": "retry",
       "retry": { "max": 2, "backoffMs": 0 },
       "context": [
         "openspec/changes/{args.change}/proposal.md",
         "openspec/changes/{args.change}/tasks.md"
       ],
-      "task": "You are the final arbiter for OpenSpec change `{args.change}`. Consolidate the evidence below and decide. Reviewer findings are claims, not facts — weigh them against the diff; confident-sounding findings can be wrong.\n\nBuild/test output:\n{steps.build-test.output}\n\nSpec validation:\n{steps.spec-validate.output}\n\nDiff:\n{steps.diff.output}\n\nSpec-compliance review (Claude):\n{steps.review-spec-claude.output}\n\nSpec-compliance review (Gemini):\n{steps.review-spec-gemini.output}\n\nSimplicity review (GPT):\n{steps.review-kiss-gpt.output}\n\nSimplicity review (GLM):\n{steps.review-kiss-glm.output}\n\nSecurity review (Claude, recall-tuned):\n{steps.review-sec-claude.output}\n\nSecurity review (GPT, precision-tuned):\n{steps.review-sec-gpt.output}\n\nRules:\n- An empty review section means that reviewer was skipped — note it in your verdict text, do not treat silence as approval, but do not block solely because an optional review is missing.\n- Where the two reviewers of one angle disagree, adjudicate explicitly against the diff and say which one you believe and why.\n- Block on any confirmed [blocker] finding, on failing build/test, on unimplemented requirements, or on tests weakened to pass. Use judgment on [major]/[minor] — cite why you accept or reject each.\n\nEnd with exactly `VERDICT: PASS`, or `VERDICT: BLOCK` followed by a precise numbered fix list (this feeds the next implement round). If uncertain, BLOCK."
+      "task": "You are the final arbiter for OpenSpec change `{args.change}`. Consolidate the evidence below and decide. Reviewer findings are claims, not facts — weigh them against the diff; confident-sounding findings can be wrong.\n\nBuild/test output:\n{steps.build-test.output}\n\nSpec validation:\n{steps.spec-validate.output}\n\nDiff:\n{steps.diff.output}\n\nSpec-compliance review (Claude):\n{steps.review-spec-claude.output}\n\nSpec-compliance review (Sonnet):\n{steps.review-spec-sonnet.output}\n\nSimplicity review (GPT):\n{steps.review-kiss-gpt.output}\n\nSimplicity review (GLM):\n{steps.review-kiss-glm.output}\n\nSecurity review (Claude, recall-tuned):\n{steps.review-sec-claude.output}\n\nSecurity review (GPT, precision-tuned):\n{steps.review-sec-gpt.output}\n\nRules:\n- An empty review section means that reviewer was skipped — note it in your verdict text, do not treat silence as approval, but do not block solely because an optional review is missing.\n- Where the two reviewers of one angle disagree, adjudicate explicitly against the diff and say which one you believe and why.\n- Block on any confirmed [blocker] finding, on failing build/test, on unimplemented requirements, or on tests weakened to pass. Use judgment on [major]/[minor] — cite why you accept or reject each.\n\nEnd with exactly `VERDICT: PASS`, or `VERDICT: BLOCK` followed by a precise numbered fix list (this feeds the next implement round). If uncertain, BLOCK."
     },
     {
       "id": "summary",

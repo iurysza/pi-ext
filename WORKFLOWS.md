@@ -88,7 +88,7 @@ implement / task-loop  (executor-code — reads proposal, design, tasks, spec de
                 │
       ┌─────────┼──────────────┐            ← review panel, runs in parallel
    spec ×2      kiss ×2         security ×2
-(Opus+Gemini)  (GPT+GLM)     (Opus recall + GPT precision)
+(Opus+Sonnet)  (GPT+GLM)     (Opus recall + GPT precision)
       └─────────┼──────────────┘
                 │
 spec-gate / acceptance-gate  (final-arbiter — consolidates all evidence,
@@ -109,7 +109,7 @@ different precision/recall profiles.
 | Phase | Angle | Model | Why (evidence) |
 |---|---|---|---|
 | `review-spec-claude` | spec compliance — every requirement/scenario has implementation evidence (file:line) | `anthropic/claude-opus-4-8` | best evidence-tracking + calibrated refusal to wave flawed work through; Claude judges measurably *under*-rate their own family, so reviewing Opus-written code is not a rubber-stamp risk |
-| `review-spec-gemini` | spec compliance (second opinion) | `github-copilot/gemini-3.1-pro-preview` | best signal-to-noise in CodeRabbit's production eval; adds a third family to the panel |
+| `review-spec-sonnet` | spec compliance (second opinion) | `anthropic/claude-sonnet-5` | strong reviewer at a lower tier than Opus; same-family risk is acceptable because Claude judges under-rate their own family (Gemini would add family diversity, but isn't available in this setup) |
 | `review-kiss-gpt` | KISS/YAGNI/DRY | `openai-codex/gpt-5.5` | only model with published evidence of scope discipline — "focused on the actual failure mode rather than drifting into speculative redesign" (CodeRabbit) |
 | `review-kiss-glm` | KISS/YAGNI/DRY (second opinion) | `zai/glm-5.2` | decisive, concise, front-loads hard calls; ~1/6 frontier cost; #1 open-weights model |
 | `review-sec-claude` | security, recall-tuned | `anthropic/claude-opus-4-8` | best recall + cross-file reasoning (Anthropic 0-day work: 500+ validated OSS vulns); prompt says "optimize for recall" |
@@ -139,8 +139,16 @@ Notes:
 
 ## Command reference
 
+**Start with `/spec`** — the `openspec-flow` extension (this repo,
+`extensions/openspec-flow/`) fronts the whole pipeline: it lists changes with
+task progress, recommends the right implement flow by change size (≤4 tasks →
+whole-change, more → per-task loop), and stages the chosen command in the
+editor so you can tweak args (e.g. `verify="…"`) before pressing Enter. It also
+offers plannotator review, validation, and (for completed changes) archiving.
+
 | Command | What |
 |---|---|
+| `/spec` | Interactive front-door: pick change → implement / review / validate / archive |
 | `/opsx-propose "<idea>"` | Create a change (proposal + specs + tasks) |
 | `/opsx-explore "<question>"` | Investigate before proposing |
 | `/opsx-apply` | Interactive, agent-driven implement (no gates) — good for tiny changes |

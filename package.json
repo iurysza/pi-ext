@@ -40,7 +40,8 @@
       "./extensions/session-store/index.ts",
       "./extensions/pi-telescope/index.ts",
       "./extensions/handoff/index.ts",
-      "./extensions/pi-sem/index.ts"
+      "./extensions/pi-sem/index.ts",
+      "./extensions/openspec-flow/index.ts"
     ],
     "skills": [
       "./skills/commit",
