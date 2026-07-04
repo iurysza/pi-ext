@@ -31,17 +31,27 @@ fall back to your Pi default model (Opus 4.8 here) when roles are unset.
    OpenSpec (via the agent) writes `openspec/changes/<id>/` with `proposal.md`,
    spec deltas under `specs/`, and a `tasks.md` checklist. Review and edit it —
    this is where you spend your judgment. Nothing is phase-locked; edit artifacts
-   any time.
+   any time. (`/opsx-*` commands are pure OpenSpec — installed by `openspec init`,
+   fully independent of taskflow.)
+
+   **The change id** is the folder name under `openspec/changes/` — the agent
+   picks a kebab-case id (e.g. `add-foo-command`) and reports it. `openspec list`
+   shows all active changes with task progress if you forget.
 
 2. **Implement** — `/tf:openspec-implement change=<id>` (or the per-task
    `/tf:openspec-implement-loop`). taskflow implements the tasks, runs your
-   build/test command, validates the spec, and runs an LLM acceptance gate that
-   re-runs implementation on `BLOCK` (self-healing). Only the final summary
-   returns to your context — intermediate transcripts stay in the runtime.
+   build/test command, validates the spec, fans out a **multi-angle, multi-model
+   review panel**, and runs an arbiter gate that re-runs implementation on
+   `BLOCK` (self-healing). Only the final summary returns to your context —
+   intermediate transcripts stay in the runtime.
 
-3. **Archive** — when the summary says everything passed:
-   `openspec archive <id>`. Delta specs merge into `openspec/specs/` (the
-   source of truth) and the change moves to `openspec/changes/archive/`.
+3. **Human review** — `/plannotator-review` opens the working-tree diff in
+   plannotator's code-review UI: annotate lines, switch diff views, send feedback
+   back to the agent. This is the human gate before specs get rewritten.
+
+4. **Archive** — when you're satisfied: `openspec archive <id>`. Delta specs
+   merge into `openspec/specs/` (the source of truth) and the change moves to
+   `openspec/changes/archive/`.
 
 ## The two flows
 
@@ -49,9 +59,9 @@ Both live in `.pi/taskflows/` and take the same args.
 
 | | `openspec-implement` | `openspec-implement-loop` |
 |---|---|---|
-| Shape | One `implement` phase for the whole change, then verify + gate with self-healing retry (≤2 rounds) | One task per iteration, **fresh context each time**, then a final acceptance gate |
+| Shape | One `implement` phase for the whole change, then review panel + arbiter gate with self-healing retry (≤2 rounds) | One task per iteration, **fresh context each time**, then review panel + arbiter gate |
 | Best for | Small/medium changes (a handful of tasks) | Large multi-task changes where one context would degrade |
-| Cost cap | `budget.maxUSD: 5` | `budget.maxUSD: 8` |
+| Cost cap | `budget.maxUSD: 8` | `budget.maxUSD: 12` |
 | Mechanism | Archetype 2 (self-healing implement→verify→rework) | `loop` + `reflexion` (each round sees why the last fell short) |
 
 **Args (both):**
@@ -73,17 +83,47 @@ load (script: openspec instructions apply --json)
 implement / task-loop  (executor-code — reads proposal, design, tasks, spec deltas)
       │
       ├── build-test    (script: your verify command)
-      └── spec-validate (script: openspec validate --strict)
+      ├── spec-validate (script: openspec validate --strict)
+      └── diff          (script: git status + git diff HEAD)
+                │
+      ┌─────────┼──────────────┐            ← review panel, runs in parallel
+review-spec  review-simplicity  review-security
+(gpt-5.5)    (glm-5.2)          (kimi k2p7)
+      └─────────┼──────────────┘
+                │
+spec-gate / acceptance-gate  (final-arbiter — consolidates all evidence,
+      │                       VERDICT: PASS/BLOCK)
+      │   └─ on BLOCK: re-runs implement + panel (≤2 rounds)
       │
-spec-gate / acceptance-gate  (reviewer — VERDICT: PASS/BLOCK, cites file:line)
-      │        └─ on BLOCK: openspec-implement re-runs implement (≤2×)
-      │
-summary  (doc-writer — final; suggests `openspec archive <id>`)
+summary  (doc-writer — final; suggests /plannotator-review + openspec archive)
 ```
 
-The gate uses a zero-token `eval` (`spec-validate` output contains "valid") before
-spending any LLM tokens, and the reviewer is a **different agent** than the
-implementer (self-review passes everything).
+### Review panel (multi-angle, multi-model)
+
+dev-loops-style review angles, each a separate phase with its **own model** so
+the panel is diverse — different model families catch different failure modes,
+and none of them is the model that wrote the code:
+
+| Phase | Angle | Agent | Model |
+|---|---|---|---|
+| `review-spec` | every requirement/scenario has implementation evidence (file:line); tasks genuinely done | `reviewer` | `openai-codex/gpt-5.5` |
+| `review-simplicity` | KISS/YAGNI/DRY — over-engineering, dead code, scope creep | `critic` | `zai/glm-5.2` |
+| `review-security` | injection, unsafe exec, path traversal, secret leaks, input validation | `security-reviewer` | `kimi-coding/k2p7` |
+| `spec-gate` | consolidates panel + build/test + diff into one verdict | `final-arbiter` | pi default (Opus) |
+
+Notes:
+
+- **Changing models**: edit the phase's `"model"` field in the flow JSON
+  (`provider/model-id` form; the model must work in your pi setup — check
+  `enabledModels` in `~/.pi/agent/settings.json`).
+- **Adding an angle** (dry, srp, docs, …): copy one `review-*` phase, change the
+  id/task/model, and add the new id to the gate's `dependsOn` plus a
+  `{steps.<id>.output}` section in the gate task.
+- Review phases are `optional: true` and read-only (`tools: read/grep/ls`): a
+  missing/failing model degrades to a skipped review instead of killing the run.
+  The arbiter is told to flag skipped reviews and not treat silence as approval.
+- Reviewers get the diff inline; untracked (new) files show only in the status
+  list, so reviewer prompts tell them to read those files themselves.
 
 ## Command reference
 
@@ -96,6 +136,7 @@ implementer (self-review passes everything).
 | `/opsx-archive` | Archive a completed change |
 | `/tf:openspec-implement change=<id> [verify="…"]` | Gated implement, whole-change |
 | `/tf:openspec-implement-loop change=<id> [verify="…"]` | Gated implement, one task at a time |
+| `/plannotator-review` | Human code-review UI over current git changes (before archive) |
 | `/tf verify` | Static-check a flow (cycles, refs, contracts) — zero tokens |
 | `/tf runs` / `/tf resume <runId>` | List runs / resume a paused or failed run |
 | `/tf peek <runId> [phaseId]` | Inspect a run's intermediate outputs |
@@ -124,8 +165,8 @@ implementer (self-review passes everything).
 - **Detached/headless runs auto-reject `approval` phases.** Neither flow uses
   approval; if you add one, don't run detached.
 - **Archiving is manual** (`openspec archive <id>`) — deliberately, so a human
-  confirms before specs are rewritten. Consider running `@plannotator/pi-extension`
-  on the diff first as a human gate.
+  confirms before specs are rewritten. Run `/plannotator-review` on the diff
+  first as the human gate.
 - **Runtime state is gitignored, definitions are versioned.** `.pi/taskflows/*.json`,
   `.pi/prompts/opsx-*`, and `.pi/skills/openspec-*` are committed;
   `.pi/taskflows/runs/`, `.pi/tasks/`, sessions, etc. stay ignored (see `.gitignore`).
