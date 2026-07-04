@@ -61,7 +61,7 @@ Both live in `.pi/taskflows/` and take the same args.
 |---|---|---|
 | Shape | One `implement` phase for the whole change, then review panel + arbiter gate with self-healing retry (≤2 rounds) | One task per iteration, **fresh context each time**, then review panel + arbiter gate |
 | Best for | Small/medium changes (a handful of tasks) | Large multi-task changes where one context would degrade |
-| Cost cap | `budget.maxUSD: 8` | `budget.maxUSD: 12` |
+| Cost cap | `budget.maxUSD: 10` | `budget.maxUSD: 15` |
 | Mechanism | Archetype 2 (self-healing implement→verify→rework) | `loop` + `reflexion` (each round sees why the last fell short) |
 
 **Args (both):**
@@ -87,8 +87,8 @@ implement / task-loop  (executor-code — reads proposal, design, tasks, spec de
       └── diff          (script: git status + git diff HEAD)
                 │
       ┌─────────┼──────────────┐            ← review panel, runs in parallel
-review-spec  review-simplicity  review-security
-(gpt-5.5)    (glm-5.2)          (kimi k2p7)
+   spec ×2      kiss ×2         security ×2
+(Opus+Gemini)  (GPT+GLM)     (Opus recall + GPT precision)
       └─────────┼──────────────┘
                 │
 spec-gate / acceptance-gate  (final-arbiter — consolidates all evidence,
@@ -98,32 +98,44 @@ spec-gate / acceptance-gate  (final-arbiter — consolidates all evidence,
 summary  (doc-writer — final; suggests /plannotator-review + openspec archive)
 ```
 
-### Review panel (multi-angle, multi-model)
+### Review panel (multi-angle, two models per angle)
 
-dev-loops-style review angles, each a separate phase with its **own model** so
-the panel is diverse — different model families catch different failure modes,
-and none of them is the model that wrote the code:
+dev-loops-style review angles, each run by **two models from different
+families**. Model assignments follow a benchmark/practitioner research pass
+(2026-07-04); the core finding: reviewer finding-overlap is only ~7%, so a
+second model per angle adds real coverage, and model families have measurably
+different precision/recall profiles.
 
-| Phase | Angle | Agent | Model |
+| Phase | Angle | Model | Why (evidence) |
 |---|---|---|---|
-| `review-spec` | every requirement/scenario has implementation evidence (file:line); tasks genuinely done | `reviewer` | `openai-codex/gpt-5.5` |
-| `review-simplicity` | KISS/YAGNI/DRY — over-engineering, dead code, scope creep | `critic` | `zai/glm-5.2` |
-| `review-security` | injection, unsafe exec, path traversal, secret leaks, input validation | `security-reviewer` | `kimi-coding/k2p7` |
-| `spec-gate` | consolidates panel + build/test + diff into one verdict | `final-arbiter` | pi default (Opus) |
+| `review-spec-claude` | spec compliance — every requirement/scenario has implementation evidence (file:line) | `anthropic/claude-opus-4-8` | best evidence-tracking + calibrated refusal to wave flawed work through; Claude judges measurably *under*-rate their own family, so reviewing Opus-written code is not a rubber-stamp risk |
+| `review-spec-gemini` | spec compliance (second opinion) | `github-copilot/gemini-3.1-pro-preview` | best signal-to-noise in CodeRabbit's production eval; adds a third family to the panel |
+| `review-kiss-gpt` | KISS/YAGNI/DRY | `openai-codex/gpt-5.5` | only model with published evidence of scope discipline — "focused on the actual failure mode rather than drifting into speculative redesign" (CodeRabbit) |
+| `review-kiss-glm` | KISS/YAGNI/DRY (second opinion) | `zai/glm-5.2` | decisive, concise, front-loads hard calls; ~1/6 frontier cost; #1 open-weights model |
+| `review-sec-claude` | security, recall-tuned | `anthropic/claude-opus-4-8` | best recall + cross-file reasoning (Anthropic 0-day work: 500+ validated OSS vulns); prompt says "optimize for recall" |
+| `review-sec-gpt` | security, precision-tuned | `openai-codex/gpt-5.5` | lowest false-positive rate of the frontier (15% vs Opus 36% white-box FPR); prompt says "optimize for precision" — the pair is the detect-then-verify pattern every source converges on |
+| `spec-gate` | arbiter — consolidates all six reviews + build/test + diff | `openai-codex/gpt-5.5` | best resistance to confident-but-wrong assertions (PARROT: 4% capitulation vs ~11% Claude), low sycophancy at high decisiveness, strict verdict-format compliance — critical because taskflow gates **fail open** on an ambiguous verdict |
+
+Kimi K2.7 was dropped from the panel entirely: last place in the one
+independent review eval it appeared in, documented lineage sycophancy, no
+third-party verification of vendor benchmarks.
 
 Notes:
 
 - **Changing models**: edit the phase's `"model"` field in the flow JSON
   (`provider/model-id` form; the model must work in your pi setup — check
-  `enabledModels` in `~/.pi/agent/settings.json`).
+  providers in `~/.pi/agent/auth.json` and `enabledModels` in settings).
 - **Adding an angle** (dry, srp, docs, …): copy one `review-*` phase, change the
   id/task/model, and add the new id to the gate's `dependsOn` plus a
   `{steps.<id>.output}` section in the gate task.
 - Review phases are `optional: true` and read-only (`tools: read/grep/ls`): a
   missing/failing model degrades to a skipped review instead of killing the run.
-  The arbiter is told to flag skipped reviews and not treat silence as approval.
+  The arbiter is told to flag skipped reviews, not treat silence as approval,
+  and to explicitly adjudicate when the two reviewers of an angle disagree.
 - Reviewers get the diff inline; untracked (new) files show only in the status
   list, so reviewer prompts tell them to read those files themselves.
+- Model assignments go stale — models ship monthly. Re-check the table when a
+  major model in the panel gets replaced by its provider.
 
 ## Command reference
 
