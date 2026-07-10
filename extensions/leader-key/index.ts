@@ -192,7 +192,7 @@ function buildEntries(
 					key: "e",
 					label: "Explore",
 					description: "openspec — investigate before proposing",
-					action: stageSpec("/opsx-explore (odpovídej vždy česky; file paths, kód a příkazy nech anglicky) ", "Describe what to explore, then Enter"),
+					action: stageSpec("/opsx-explore ", "Describe what to explore, then Enter"),
 				},
 				{
 					key: "s",
