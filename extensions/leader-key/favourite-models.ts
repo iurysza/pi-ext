@@ -11,6 +11,9 @@
  *   - Pattern-level thinking suffixes like "provider/model:high" are honored.
  */
 
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { SettingsManager } from "@mariozechner/pi-coding-agent";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
@@ -42,37 +45,25 @@ interface HeaderRow {
 type DisplayRow = ModelRow | HeaderRow;
 
 function buildDisplayRows(favourites: FavouriteModelEntry[]): DisplayRow[] {
-	const sorted = favourites
-		.map((f, i) => ({ ...f, originalIndex: i }))
-		.sort((a, b) => {
-			const pc = a.provider.localeCompare(b.provider);
-			if (pc !== 0) return pc;
-			return a.label.localeCompare(b.label);
-		});
+	const providerCounts = new Map<string, number>();
+	for (const favourite of favourites) {
+		providerCounts.set(favourite.provider, (providerCounts.get(favourite.provider) ?? 0) + 1);
+	}
 
 	const rows: DisplayRow[] = [];
 	let lastProvider = "";
-	let providerCount = 0;
-	let providerStart = 0;
-
-	for (let i = 0; i < sorted.length; i++) {
-		const item = sorted[i];
-		if (item.provider !== lastProvider) {
-			if (lastProvider) {
-				rows[providerStart] = { type: "header", provider: lastProvider, count: providerCount };
-			}
-			rows.push({ type: "header", provider: item.provider, count: 0 });
-			providerStart = rows.length - 1;
-			providerCount = 0;
-			lastProvider = item.provider;
+	for (let i = 0; i < favourites.length; i++) {
+		const favourite = favourites[i];
+		if (favourite.provider !== lastProvider) {
+			rows.push({
+				type: "header",
+				provider: favourite.provider,
+				count: providerCounts.get(favourite.provider) ?? 0,
+			});
+			lastProvider = favourite.provider;
 		}
-		rows.push({ type: "model", fav: item, modelIndex: item.originalIndex });
-		providerCount++;
+		rows.push({ type: "model", fav: favourite, modelIndex: i });
 	}
-	if (lastProvider) {
-		rows[providerStart] = { type: "header", provider: lastProvider, count: providerCount };
-	}
-
 	return rows;
 }
 
@@ -164,9 +155,15 @@ function sortAllAvailableModels(
 	});
 }
 
-function toEntry(model: Model<any>, thinking?: ThinkingLevel): FavouriteModelEntry {
+function loadModelNicknames(): Record<string, string> {
+	const configPath = join(dirname(fileURLToPath(import.meta.url)), "model-nicknames.json");
+	if (!existsSync(configPath)) return {};
+	return JSON.parse(readFileSync(configPath, "utf8")) as Record<string, string>;
+}
+
+function toEntry(model: Model<any>, thinking?: ThinkingLevel, nickname?: string): FavouriteModelEntry {
 	return {
-		label: model.name,
+		label: nickname ? `${nickname} — ${model.name}` : model.name,
 		provider: model.provider,
 		model: model.id,
 		thinking,
@@ -177,6 +174,7 @@ function loadScopedModels(ctx: ExtensionContext): FavouriteModelEntry[] {
 	const settings = SettingsManager.create(ctx.cwd);
 	const patterns = settings.getEnabledModels();
 	const availableModels = ctx.modelRegistry.getAvailable();
+	const nicknames = loadModelNicknames();
 
 	if (!patterns || patterns.length === 0) {
 		return sortAllAvailableModels(availableModels, ctx.model).map((model) => toEntry(model));
@@ -185,17 +183,18 @@ function loadScopedModels(ctx: ExtensionContext): FavouriteModelEntry[] {
 	const resolved: FavouriteModelEntry[] = [];
 	const seen = new Set<string>();
 
-	const pushModel = (model: Model<any>, thinking?: ThinkingLevel) => {
-		const key = `${model.provider}/${model.id}`.toLowerCase();
+	const pushModel = (model: Model<any>, thinking?: ThinkingLevel, nickname?: string) => {
+		const key = `${model.provider}/${model.id}:${thinking ?? ""}`.toLowerCase();
 		if (seen.has(key)) return;
 		seen.add(key);
-		resolved.push(toEntry(model, thinking));
+		resolved.push(toEntry(model, thinking, nickname));
 	};
 
 	for (const rawPattern of patterns) {
+		const nickname = nicknames[rawPattern];
 		const exactFullMatch = findExactModelReferenceMatch(rawPattern, availableModels);
 		if (exactFullMatch) {
-			pushModel(exactFullMatch);
+			pushModel(exactFullMatch, undefined, nickname);
 			continue;
 		}
 
@@ -212,7 +211,7 @@ function loadScopedModels(ctx: ExtensionContext): FavouriteModelEntry[] {
 
 		const exactMatch = findExactModelReferenceMatch(pattern, availableModels);
 		if (exactMatch) {
-			pushModel(exactMatch, thinking);
+			pushModel(exactMatch, thinking, nickname);
 			continue;
 		}
 
@@ -223,7 +222,7 @@ function loadScopedModels(ctx: ExtensionContext): FavouriteModelEntry[] {
 		});
 
 		for (const model of matchingModels) {
-			pushModel(model, thinking);
+			pushModel(model, thinking, nickname);
 		}
 	}
 

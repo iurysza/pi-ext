@@ -19,18 +19,25 @@ A collection of extensions, skills, and themes for [Pi](https://github.com/badlo
 
 Extensions cover everything from UI polish (custom footer, tool pills, leader-key palette) to deep workflow tooling (semantic git review, session archiving, context handoff between sessions, cmux integration). Everything is MIT licensed and designed to be installed together or individually.
 
+This fork tracks [tomsej/pi-ext](https://github.com/tomsej/pi-ext) and adds:
+
+- Herdr, tmux, and cmux-aware handoff and split-fork behavior
+- A standalone `/split-fork` command
+- Restored bash output rendering in Tool Pills
+- OpenSpec workflow output that follows the active session language instead of forcing Czech
+
 > *Leader key palette → fuzzy finder → semantic review → handoff to a fresh session*
 
 ## Install
 
 ```bash
-pi install git:github.com/tomsej/pi-ext
+pi install git:github.com/iurysza/pi-ext@main
 ```
 
 Or using the full URL:
 
 ```bash
-pi install https://github.com/tomsej/pi-ext
+pi install https://github.com/iurysza/pi-ext@main
 ```
 
 To install the full package but only load specific extensions or skills, use package filtering in your `settings.json`:
@@ -39,7 +46,7 @@ To install the full package but only load specific extensions or skills, use pac
 {
   "packages": [
     {
-      "source": "git:github.com/tomsej/pi-ext",
+      "source": "git:github.com/iurysza/pi-ext@main",
       "extensions": ["extensions/leader-key"],
       "skills": []
     }
@@ -62,6 +69,33 @@ Includes sub-modules:
 - **Favourite Models** — quick-switch to preset model+thinking combos via `favourite-models.json`
 - **Thinking Picker** — adjust reasoning effort (off, minimal, low, medium, high, xhigh)
 - **Session / Label Actions** — rename, archive, label, and jump between sessions
+
+#### OpenSpec workflow
+
+Press `Ctrl+X`, then `c` to open the Spec group:
+
+| Key | Action | Command |
+|---|---|---|
+| `e` | Explore before proposing | `/opsx-explore` |
+| `s` | Create a proposal, specs, and tasks | `/opsx-propose` |
+| `a` | Implement a change interactively | `/opsx-apply` |
+| `r` | Run the multi-angle review taskflow | `/tf:openspec-review` |
+| `x` | Sync specs and archive a change | `/opsx-archive` |
+
+OpenSpec prompts and skills are project-local. Initialize each project that uses the workflow:
+
+```bash
+openspec init --tools pi
+```
+
+The review command also needs the taskflow engine and the bundled review flow:
+
+```bash
+pi install npm:pi-taskflow
+npm --prefix ~/.pi/agent/git/github.com/iurysza/pi-ext run flows:install
+```
+
+Run `/reload` after setup. Explore follows the conversation language. Final review reports use the session language when available and default to English; paths, identifiers, commands, and `VERDICT:` remain unchanged.
 
 ### [Custom Footer](extensions/custom-footer/)
 
@@ -153,7 +187,7 @@ Registers an `ask_user_question` tool the model uses to ask 1–4 structured cla
 
 Most extensions work out of the box. Notable config:
 
-- **Leader Key** — edit `extensions/leader-key/favourite-models.json` to set your favourite model presets
+- **Leader Key** — Scoped Models follows Pi's ordered `enabledModels`; optionally map exact entries to display roles in `extensions/leader-key/model-nicknames.json`
 - **Permissions** — edit `~/.pi/agent/permissions.json` (global) or `.agents/permissions.json` (project) to add bash rules; use `/mode` to switch modes
 - **pi-sem** — `npm install` should fetch the optional `@ataraxy-labs/sem` wrapper automatically; otherwise install `sem` globally with Homebrew or Cargo
 
