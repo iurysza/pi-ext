@@ -112,7 +112,7 @@ export default function (pi: ExtensionAPI) {
 			.filter(Boolean)
 			.join(" ");
 
-		return text ? truncateToWidth(text, width) : null;
+		return text ? truncateToWidth(` ${text}`, width) : null;
 	}
 
 	// ── Line 1: Mode │ Path │ Context │ Model ──────────────────────────
