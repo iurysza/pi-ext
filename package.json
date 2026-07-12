@@ -8,10 +8,10 @@
     "@mariozechner/pi-tui": "^0.69.0",
     "@sting8k/pi-vcc": "^0.3.5",
     "@tintinweb/pi-tasks": "^0.4.2",
+    "better-sqlite3": "^12.10.0",
+    "pi-codex-kimi-usage": "github:iurysza/pi-codex-kimi-usage#49fc488",
     "pi-taskflow": "^0.1.5",
-    "pi-codex-kimi-usage": "github:iurysza/pi-codex-kimi-usage#fd78aa8",
-    "typebox": "^1.1.32",
-    "better-sqlite3": "^12.10.0"
+    "typebox": "^1.1.32"
   },
   "optionalDependencies": {
     "@ataraxy-labs/sem": "^0.3.21"
