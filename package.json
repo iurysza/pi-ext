@@ -9,7 +9,7 @@
     "@sting8k/pi-vcc": "^0.3.5",
     "@tintinweb/pi-tasks": "^0.4.2",
     "better-sqlite3": "^12.10.0",
-    "pi-model-quotas": "github:iurysza/pi-model-quotas#a59cecc",
+    "pi-model-quotas": "github:iurysza/pi-model-quotas#763ba7d",
     "pi-taskflow": "^0.1.5",
     "typebox": "^1.1.32"
   },
