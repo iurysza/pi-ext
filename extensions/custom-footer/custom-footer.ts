@@ -2,9 +2,9 @@
  * Custom Footer Extension — Two-line compact powerline style
  *
  * Line 1:  MODE  ~/path (branch) │ 42%/200k │ ⚡ model • thinking
- * Line 2: Provider  S ████████ 23%  ⟳ 2h 14m  W ██████░░ 67%  ⟳ 3d 5h
+ * Line 2: Extension statuses registered through ctx.ui.setStatus().
  *
- * Rendered as a belowEditor widget (not setFooter) so sub-bar appears below us.
+ * Rendered as a belowEditor widget while the default footer is suppressed.
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -40,6 +40,7 @@ function getGitBranch(cwd: string): string | null {
 export default function (pi: ExtensionAPI) {
 	let currentMode: PermissionMode = "safe";
 	let tuiRef: { requestRender(): void } | null = null;
+	let footerDataRef: { getExtensionStatuses(): ReadonlyMap<string, string> } | null = null;
 	let gitBranch: string | null = null;
 	let gitWatcher: FSWatcher | undefined;
 
@@ -61,7 +62,16 @@ export default function (pi: ExtensionAPI) {
 			});
 		}
 
-		// Render as a belowEditor widget — no setFooter, so no divider line
+		// Suppress the default footer, but retain its data provider so extension
+		// statuses remain visible in our below-editor footer.
+		ctx.ui.setFooter((_footerTui, _footerTheme, footerData) => {
+			footerDataRef = footerData;
+			return {
+				render() { return []; },
+				invalidate() { tuiRef?.requestRender(); },
+			};
+		});
+
 		const setWidgetFn = ctx.ui.setWidget.bind(ctx.ui) as (
 			name: string,
 			content: unknown,
@@ -74,26 +84,36 @@ export default function (pi: ExtensionAPI) {
 				tuiRef = _widgetTui;
 				return {
 					render(width: number): string[] {
-						return [
-							renderLine1(width, widgetTheme, ctx),
-						];
+						const lines = [renderLine1(width, widgetTheme, ctx)];
+						const statusLine = renderExtensionStatuses(width);
+						if (statusLine) lines.push(statusLine);
+						return lines;
 					},
 					invalidate() {},
 				};
 			},
 			{ placement: "belowEditor" },
 		);
-
-		// Suppress default pi footer (empty render)
-		ctx.ui.setFooter(() => ({
-			render() { return []; },
-			invalidate() {},
-		}));
 	});
 
 	pi.on("session_shutdown", async () => {
 		gitWatcher?.close();
+		footerDataRef = null;
+		tuiRef = null;
 	});
+
+	function renderExtensionStatuses(width: number): string | null {
+		const statuses = footerDataRef?.getExtensionStatuses();
+		if (!statuses || statuses.size === 0) return null;
+
+		const text = Array.from(statuses.entries())
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([, value]) => value.replace(/[\r\n\t]+/g, " ").trim())
+			.filter(Boolean)
+			.join(" ");
+
+		return text ? truncateToWidth(text, width) : null;
+	}
 
 	// ── Line 1: Mode │ Path │ Context │ Model ──────────────────────────
 
