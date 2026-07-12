@@ -9,7 +9,7 @@
     "@sting8k/pi-vcc": "^0.3.5",
     "@tintinweb/pi-tasks": "^0.4.2",
     "better-sqlite3": "^12.10.0",
-    "pi-codex-kimi-usage": "github:iurysza/pi-codex-kimi-usage#41e671b",
+    "pi-model-quotas": "github:iurysza/pi-model-quotas#a59cecc",
     "pi-taskflow": "^0.1.5",
     "typebox": "^1.1.32"
   },
@@ -32,7 +32,7 @@
   "pi": {
     "extensions": [
       "./extensions/custom-footer/custom-footer.ts",
-      "./extensions/codex-kimi-usage/index.ts",
+      "./extensions/model-quotas/index.ts",
       "./extensions/review/review.ts",
       "./extensions/leader-key/index.ts",
       "./extensions/permissions/permissions.ts",
