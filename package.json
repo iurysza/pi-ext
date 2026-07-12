@@ -10,7 +10,7 @@
     "@tintinweb/pi-tasks": "^0.4.2",
     "better-sqlite3": "^12.10.0",
     "pi-taskflow": "^0.1.5",
-    "pi-token-tank": "github:iurysza/pi-token-tank#437eddb",
+    "pi-token-tank": "github:iurysza/pi-token-tank#7058d0c",
     "typebox": "^1.1.32"
   },
   "optionalDependencies": {
