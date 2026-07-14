@@ -1,7 +1,7 @@
 /**
  * Custom Footer Extension — Two-line compact powerline style
  *
- * Line 1:  MODE  ~/path (branch) │ 42%/200k │ ⚡ model • thinking
+ * Line 1:  MODE  ~/path (branch) │ 42%/200k │ ended 3:59 pm · 1m 50s ago │ ⚡ model • thinking
  * Line 2: Extension statuses registered through ctx.ui.setStatus().
  *
  * Rendered as a belowEditor widget while the default footer is suppressed.
@@ -35,6 +35,25 @@ function getGitBranch(cwd: string): string | null {
 	}
 }
 
+function formatResponseTime(endedAt: number): string {
+	const time = new Date(endedAt).toLocaleTimeString("en-US", {
+		hour: "numeric",
+		minute: "2-digit",
+		hour12: true,
+	}).toLowerCase();
+	const elapsedSeconds = Math.max(0, Math.floor((Date.now() - endedAt) / 1000));
+
+	if (elapsedSeconds < 60) return `◷ ended ${time} · ${elapsedSeconds}s ago`;
+
+	const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+	if (elapsedMinutes < 60) return `◷ ended ${time} · ${elapsedMinutes}m ${elapsedSeconds % 60}s ago`;
+
+	const elapsedHours = Math.floor(elapsedMinutes / 60);
+	if (elapsedHours < 24) return `◷ ended ${time} · ${elapsedHours}h ${elapsedMinutes % 60}m ago`;
+
+	return `◷ ended ${time} · ${Math.floor(elapsedHours / 24)}d ${elapsedHours % 24}h ago`;
+}
+
 // ── Extension ──────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
@@ -43,6 +62,8 @@ export default function (pi: ExtensionAPI) {
 	let footerDataRef: { getExtensionStatuses(): ReadonlyMap<string, string> } | null = null;
 	let gitBranch: string | null = null;
 	let gitWatcher: FSWatcher | undefined;
+	let responseEndedAt: number | null = null;
+	let responseAgeTimer: ReturnType<typeof setInterval> | undefined;
 
 	pi.events.on("mode:change", (data: unknown) => {
 		currentMode = data as PermissionMode;
@@ -50,6 +71,11 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
+		responseAgeTimer = setInterval(() => {
+			if (responseEndedAt !== null) tuiRef?.requestRender();
+		}, 1000);
+		responseAgeTimer.unref?.();
+
 		// Get initial git branch
 		gitBranch = getGitBranch(ctx.cwd);
 
@@ -96,8 +122,20 @@ export default function (pi: ExtensionAPI) {
 		);
 	});
 
+	pi.on("agent_start", () => {
+		responseEndedAt = null;
+		tuiRef?.requestRender();
+	});
+
+	pi.on("agent_end", () => {
+		responseEndedAt = Date.now();
+		tuiRef?.requestRender();
+	});
+
 	pi.on("session_shutdown", async () => {
 		gitWatcher?.close();
+		if (responseAgeTimer) clearInterval(responseAgeTimer);
+		responseAgeTimer = undefined;
 		footerDataRef = null;
 		tuiRef = null;
 	});
@@ -144,9 +182,12 @@ export default function (pi: ExtensionAPI) {
 		const modelName = ctx.model?.id || "no-model";
 		const thinking = pi.getThinkingLevel();
 		const model = renderModelInfo(modelName, provider, thinking, theme);
+		const responseTimeRaw = responseEndedAt === null ? "" : formatResponseTime(responseEndedAt);
+		const responseTime = responseTimeRaw ? theme.fg("dim", responseTimeRaw) : "";
 
 		// Layout: compute path budget from remaining space
-		const rightBlockWidth = visibleWidth(ctxRaw) + sepW + model.rawWidth;
+		const responseTimeWidth = responseTimeRaw ? sepW + visibleWidth(responseTimeRaw) : 0;
+		const rightBlockWidth = visibleWidth(ctxRaw) + responseTimeWidth + sepW + model.rawWidth;
 		const pathBudget = width - pillW - sepW - rightBlockWidth - sepW;
 		const pathDisplay = renderPath(pathRaw, pathBudget, theme);
 
@@ -154,6 +195,7 @@ export default function (pi: ExtensionAPI) {
 		const segments: string[] = [pill];
 		if (pathDisplay) segments.push(pathDisplay);
 		segments.push(ctxColored);
+		if (responseTime) segments.push(responseTime);
 		segments.push(model.text);
 
 		return truncateToWidth(segments.join(sep), width);

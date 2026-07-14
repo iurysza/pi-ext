@@ -102,10 +102,10 @@ Run `/reload` after setup. Explore follows the conversation language. Final revi
 Replaces Pi's default footer with a compact powerline-style status bar:
 
 ```
-~/project (main) │ ↑12k ↓8k $0.42 │ 42%/200k │ ⚡ claude-sonnet-4 • medium
+~/project (main) │ ↑12k ↓8k $0.42 │ 42%/200k │ ◷ ended 3:59 pm · 1m 50s ago │ ⚡ claude-sonnet-4 • medium
 ```
 
-Shows working directory, git branch, token usage, cost, context window utilization, and active model — all in a single line.
+Shows working directory, git branch, token usage, cost, context window utilization, live time since the last response ended, and active model — all in a single line.
 
 ### [Tool Pills](extensions/tool-pills/)
 
