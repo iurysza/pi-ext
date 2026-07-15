@@ -16,6 +16,14 @@
   "optionalDependencies": {
     "@ataraxy-labs/sem": "^0.3.21"
   },
+  "allowScripts": {
+    "@ataraxy-labs/sem@0.3.21": true,
+    "@google/genai@1.52.0": true,
+    "better-sqlite3@12.11.1": true,
+    "koffi@2.15.2": true,
+    "protobufjs@7.5.4": true,
+    "protobufjs@7.6.4": true
+  },
   "description": "Personal collection of Pi extensions, themes, and skills.",
   "keywords": [
     "pi-package",
