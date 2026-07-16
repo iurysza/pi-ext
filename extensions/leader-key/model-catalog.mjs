@@ -20,6 +20,7 @@ import { join } from "node:path";
  * @property {string} defaultModel
  * @property {CatalogEntry[]} entries
  * @property {string} setupHint
+ * @property {boolean} [fallback]
  */
 
 /**
@@ -75,6 +76,43 @@ export function matchCatalogToRegistry(catalog, availableModels) {
     ...entry,
     matched: findRegistryMatch(entry, availableModels),
   }));
+}
+
+/** Build the exact entries and hint consumed by the picker UI. */
+export function buildPickerViewModel({ catalog, availableModels, currentModel, currentThinking }) {
+  const setupHint = buildSetupHint(catalog);
+  if (!catalog || catalog.entries.length === 0) {
+    return {
+      entries: currentModel ? [{
+        label: currentModel.name,
+        provider: currentModel.provider,
+        model: currentModel.id,
+        thinking: currentThinking,
+        active: true,
+      }] : [],
+      fallbackHint: setupHint,
+    };
+  }
+
+  const seen = new Set();
+  const entries = [];
+  for (const entry of matchCatalogToRegistry(catalog, availableModels)) {
+    if (!entry.matched) continue;
+    const key = `${entry.provider}/${entry.model}:${entry.thinking}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    entries.push({
+      label: `${entry.nickname} — ${entry.matched.name}`,
+      provider: entry.provider,
+      model: entry.model,
+      thinking: entry.thinking,
+      active: currentModel?.provider === entry.provider && currentModel?.id === entry.model,
+    });
+  }
+  return {
+    entries,
+    fallbackHint: catalog.fallback ? setupHint : undefined,
+  };
 }
 
 /**

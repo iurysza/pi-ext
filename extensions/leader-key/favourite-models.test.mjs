@@ -5,6 +5,7 @@ import path from "node:path";
 import { describe, it, before, after } from "node:test";
 import {
   activeDefaultNickname,
+  buildPickerViewModel,
   buildSetupHint,
   catalogPath,
   loadModelCatalog,
@@ -109,6 +110,36 @@ describe("matchCatalogToRegistry", () => {
     const matched = matchCatalogToRegistry(catalog, available);
     assert.strictEqual(matched[0].matched.name, "GPT-5.6 Sol");
     assert.strictEqual(matched[1].matched.name, "GPT-5.6 Sol");
+  });
+});
+
+describe("buildPickerViewModel", () => {
+  const current = makeModel("openai-codex", "gpt-5.6-sol", "GPT-5.6 Sol");
+
+  it("shows the active model and setup hint when the sidecar is absent", () => {
+    const view = buildPickerViewModel({ catalog: null, availableModels: [current], currentModel: current, currentThinking: "xhigh" });
+    assert.deepStrictEqual(view.entries, [{ label: "GPT-5.6 Sol", provider: "openai-codex", model: "gpt-5.6-sol", thinking: "xhigh", active: true }]);
+    assert.match(view.fallbackHint, /install-config\.json/);
+  });
+
+  it("shows the synthesized Default entry plus its actionable hint", () => {
+    const catalog = { defaultModel: "Default", fallback: true, entries: [{ nickname: "Default", provider: "openai-codex", model: "gpt-5.6-sol", thinking: "xhigh" }], setupHint: "Configure profiles.work.models in install-config.json" };
+    const view = buildPickerViewModel({ catalog, availableModels: [current], currentModel: current, currentThinking: "xhigh" });
+    assert.strictEqual(view.entries[0].label, "Default — GPT-5.6 Sol");
+    assert.strictEqual(view.entries[0].active, true);
+    assert.strictEqual(view.fallbackHint, catalog.setupHint);
+  });
+
+  it("preserves labels and order while dropping unknown and duplicate models", () => {
+    const catalog = { defaultModel: "Deep", entries: [
+      { nickname: "Deep", provider: "openai-codex", model: "gpt-5.6-sol", thinking: "xhigh" },
+      { nickname: "Missing", provider: "unknown", model: "none", thinking: "high" },
+      { nickname: "Duplicate", provider: "openai-codex", model: "gpt-5.6-sol", thinking: "xhigh" },
+      { nickname: "Coder", provider: "openai-codex", model: "gpt-5.6-sol", thinking: "medium" },
+    ], setupHint: "unused" };
+    const view = buildPickerViewModel({ catalog, availableModels: [current], currentModel: current, currentThinking: "medium" });
+    assert.deepStrictEqual(view.entries.map((entry) => entry.label), ["Deep — GPT-5.6 Sol", "Coder — GPT-5.6 Sol"]);
+    assert.strictEqual(view.fallbackHint, undefined);
   });
 });
 

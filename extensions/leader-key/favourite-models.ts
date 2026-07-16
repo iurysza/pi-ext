@@ -7,16 +7,11 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import type { Model } from "@mariozechner/pi-ai";
 import { matchesKey, parseKey, Key } from "@mariozechner/pi-tui";
 import { OverlayFrame } from "../shared/overlay.js";
 import { ALL_THINKING_LEVELS } from "./model-switcher.js";
 import { THINKING_ROLES } from "../shared/thinking-colors.js";
-import {
-  buildSetupHint,
-  loadModelCatalog,
-  matchCatalogToRegistry,
-} from "./model-catalog.mjs";
+import { buildPickerViewModel, loadModelCatalog } from "./model-catalog.mjs";
 
 interface FavouriteModelEntry {
 	label: string;
@@ -102,44 +97,13 @@ function getPrintableKey(data: string): string | null {
 	return null;
 }
 
-function toEntry(model: Model<any>, thinking: ThinkingLevel, nickname?: string): FavouriteModelEntry {
-	return {
-		label: nickname ? `${nickname} — ${model.name}` : model.name,
-		provider: model.provider,
-		model: model.id,
-		thinking,
-	};
-}
-
 function loadScopedModels(pi: ExtensionAPI, ctx: ExtensionContext): { entries: FavouriteModelEntry[]; fallbackHint?: string } {
-	const availableModels = ctx.modelRegistry.getAvailable();
-	const catalog = loadModelCatalog();
-
-	if (!catalog || catalog.entries.length === 0) {
-		const current = ctx.model;
-		const currentThinking = pi.getThinkingLevel();
-		if (current) {
-			return {
-				entries: [toEntry(current, currentThinking)],
-				fallbackHint: buildSetupHint(catalog),
-			};
-		}
-		return { entries: [], fallbackHint: buildSetupHint(catalog) };
-	}
-
-	const matched = matchCatalogToRegistry(catalog, availableModels);
-	const resolved: FavouriteModelEntry[] = [];
-	const seen = new Set<string>();
-
-	for (const entry of matched) {
-		if (!entry.matched) continue;
-		const key = `${entry.provider}/${entry.model}:${entry.thinking}`.toLowerCase();
-		if (seen.has(key)) continue;
-		seen.add(key);
-		resolved.push(toEntry(entry.matched, entry.thinking, entry.nickname));
-	}
-
-	return { entries: resolved };
+	return buildPickerViewModel({
+		catalog: loadModelCatalog(),
+		availableModels: ctx.modelRegistry.getAvailable(),
+		currentModel: ctx.model,
+		currentThinking: pi.getThinkingLevel(),
+	});
 }
 
 interface PickerResult {
