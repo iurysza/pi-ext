@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 /**
@@ -32,10 +33,7 @@ export function catalogPath(overrides) {
   if (process.env.PI_CODING_AGENT_DIR) {
     return join(process.env.PI_CODING_AGENT_DIR, "model-catalog.json");
   }
-  if (overrides?.cwd) {
-    return join(overrides.cwd, "model-catalog.json");
-  }
-  return join(process.cwd(), "model-catalog.json");
+  return join(homedir(), ".pi", "agent", "model-catalog.json");
 }
 
 /**

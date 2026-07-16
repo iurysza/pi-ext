@@ -21,11 +21,10 @@ describe("catalogPath", () => {
     assert.strictEqual(p, "/tmp/agent/model-catalog.json");
   });
 
-  it("falls back to cwd when no env", () => {
+  it("falls back to the normal Pi agent directory when no env", () => {
     const original = process.env.PI_CODING_AGENT_DIR;
     delete process.env.PI_CODING_AGENT_DIR;
-    const p = catalogPath({ cwd: "/tmp/cwd" });
-    assert.strictEqual(p, "/tmp/cwd/model-catalog.json");
+    assert.strictEqual(catalogPath(), path.join(os.homedir(), ".pi/agent/model-catalog.json"));
     if (original) process.env.PI_CODING_AGENT_DIR = original;
   });
 });
@@ -40,7 +39,7 @@ describe("loadModelCatalog", () => {
   });
 
   it("returns null when sidecar missing", () => {
-    assert.strictEqual(loadModelCatalog({ cwd: tmpDir }), null);
+    assert.strictEqual(loadModelCatalog({ agentDir: tmpDir }), null);
   });
 
   it("parses valid sidecar", () => {
@@ -55,7 +54,7 @@ describe("loadModelCatalog", () => {
         setupHint: "hint text",
       })
     );
-    const catalog = loadModelCatalog({ cwd: tmpDir });
+    const catalog = loadModelCatalog({ agentDir: tmpDir });
     assert.strictEqual(catalog.defaultModel, "Deep");
     assert.strictEqual(catalog.entries.length, 2);
     assert.strictEqual(catalog.entries[1].nickname, "Workhorse");
@@ -63,7 +62,7 @@ describe("loadModelCatalog", () => {
 
   it("returns null for malformed sidecar", () => {
     fs.writeFileSync(path.join(tmpDir, "model-catalog.json"), "not-json");
-    assert.strictEqual(loadModelCatalog({ cwd: tmpDir }), null);
+    assert.strictEqual(loadModelCatalog({ agentDir: tmpDir }), null);
   });
 });
 

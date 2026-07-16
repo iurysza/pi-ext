@@ -113,7 +113,7 @@ function toEntry(model: Model<any>, thinking: ThinkingLevel, nickname?: string):
 
 function loadScopedModels(pi: ExtensionAPI, ctx: ExtensionContext): { entries: FavouriteModelEntry[]; fallbackHint?: string } {
 	const availableModels = ctx.modelRegistry.getAvailable();
-	const catalog = loadModelCatalog({ cwd: ctx.cwd });
+	const catalog = loadModelCatalog();
 
 	if (!catalog || catalog.entries.length === 0) {
 		const current = ctx.model;
@@ -224,6 +224,7 @@ export async function runFavouriteModels(pi: ExtensionAPI, ctx: ExtensionContext
 					}
 
 					lines.push(f.separator());
+					if (fallbackHint) lines.push(f.rowTruncated(th.fg("warning", fallbackHint)));
 					lines.push(f.row(th.fg("dim", "j/k navigate | 1-9 jump | left/right cycle thinking")));
 					lines.push(f.row(th.fg("dim", "o/i/l/m/h/x set thinking | enter select | esc cancel")));
 					lines.push(f.bottom());
