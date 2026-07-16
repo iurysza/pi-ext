@@ -10,7 +10,6 @@
     "@tintinweb/pi-tasks": "^0.4.2",
     "better-sqlite3": "^12.10.0",
     "pi-taskflow": "^0.1.5",
-    "pi-token-tank": "github:iurysza/pi-token-tank#438877f",
     "typebox": "^1.1.32"
   },
   "optionalDependencies": {
@@ -40,7 +39,6 @@
   "pi": {
     "extensions": [
       "./extensions/custom-footer/custom-footer.ts",
-      "./extensions/token-tank/index.ts",
       "./extensions/review/review.ts",
       "./extensions/leader-key/index.ts",
       "./extensions/permissions/permissions.ts",

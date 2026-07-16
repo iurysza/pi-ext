@@ -1,27 +1,22 @@
 /**
  * Scoped Models Picker
  *
- * Legacy file name kept for leader-key wiring, but the picker no longer reads
- * favourite-models.json. Entries now come from Pi's enabledModels scope plus
- * the current model registry.
- *
- * Behavior:
- *   - If enabledModels is configured, resolve those patterns in order.
- *   - If enabledModels is empty, fall back to all available models.
- *   - Pattern-level thinking suffixes like "provider/model:high" are honored.
+ * Reads the profile model-catalog sidecar and shows those entries in declared
+ * order. If no sidecar exists, shows only the current model with a hint.
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { SettingsManager } from "@mariozechner/pi-coding-agent";
 import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
 import type { Model } from "@mariozechner/pi-ai";
 import { matchesKey, parseKey, Key } from "@mariozechner/pi-tui";
 import { OverlayFrame } from "../shared/overlay.js";
 import { ALL_THINKING_LEVELS } from "./model-switcher.js";
 import { THINKING_ROLES } from "../shared/thinking-colors.js";
+import {
+  buildSetupHint,
+  loadModelCatalog,
+  matchCatalogToRegistry,
+} from "./model-catalog.mjs";
 
 interface FavouriteModelEntry {
 	label: string;
@@ -107,61 +102,7 @@ function getPrintableKey(data: string): string | null {
 	return null;
 }
 
-function isThinkingLevel(value: string | undefined): value is ThinkingLevel {
-	return !!value && ALL_THINKING_LEVELS.includes(value as ThinkingLevel);
-}
-
-function escapeRegExp(text: string): string {
-	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function globToRegExp(pattern: string): RegExp {
-	return new RegExp(
-		"^" + escapeRegExp(pattern).replace(/\\\*/g, ".*").replace(/\\\?/g, ".") + "$",
-		"i",
-	);
-}
-
-function findExactModelReferenceMatch(
-	modelReference: string,
-	availableModels: Model<any>[],
-): Model<any> | undefined {
-	const slashIndex = modelReference.indexOf("/");
-	if (slashIndex !== -1) {
-		const provider = modelReference.substring(0, slashIndex).toLowerCase();
-		const modelId = modelReference.substring(slashIndex + 1).toLowerCase();
-		return availableModels.find(
-			(model) => model.provider.toLowerCase() === provider && model.id.toLowerCase() === modelId,
-		);
-	}
-
-	const matches = availableModels.filter((model) => model.id.toLowerCase() === modelReference.toLowerCase());
-	return matches.length === 1 ? matches[0] : undefined;
-}
-
-function sortAllAvailableModels(
-	availableModels: Model<any>[],
-	currentModel: Model<any> | undefined,
-): Model<any>[] {
-	return [...availableModels].sort((a, b) => {
-		const aIsCurrent = currentModel?.provider === a.provider && currentModel?.id === a.id;
-		const bIsCurrent = currentModel?.provider === b.provider && currentModel?.id === b.id;
-		if (aIsCurrent && !bIsCurrent) return -1;
-		if (!aIsCurrent && bIsCurrent) return 1;
-
-		const providerCmp = a.provider.localeCompare(b.provider);
-		if (providerCmp !== 0) return providerCmp;
-		return a.name.localeCompare(b.name);
-	});
-}
-
-function loadModelNicknames(): Record<string, string> {
-	const configPath = join(dirname(fileURLToPath(import.meta.url)), "model-nicknames.json");
-	if (!existsSync(configPath)) return {};
-	return JSON.parse(readFileSync(configPath, "utf8")) as Record<string, string>;
-}
-
-function toEntry(model: Model<any>, thinking?: ThinkingLevel, nickname?: string): FavouriteModelEntry {
+function toEntry(model: Model<any>, thinking: ThinkingLevel, nickname?: string): FavouriteModelEntry {
 	return {
 		label: nickname ? `${nickname} — ${model.name}` : model.name,
 		provider: model.provider,
@@ -170,63 +111,35 @@ function toEntry(model: Model<any>, thinking?: ThinkingLevel, nickname?: string)
 	};
 }
 
-function loadScopedModels(ctx: ExtensionContext): FavouriteModelEntry[] {
-	const settings = SettingsManager.create(ctx.cwd);
-	const patterns = settings.getEnabledModels();
+function loadScopedModels(pi: ExtensionAPI, ctx: ExtensionContext): { entries: FavouriteModelEntry[]; fallbackHint?: string } {
 	const availableModels = ctx.modelRegistry.getAvailable();
-	const nicknames = loadModelNicknames();
+	const catalog = loadModelCatalog({ cwd: ctx.cwd });
 
-	if (!patterns || patterns.length === 0) {
-		return sortAllAvailableModels(availableModels, ctx.model).map((model) => toEntry(model));
+	if (!catalog || catalog.entries.length === 0) {
+		const current = ctx.model;
+		const currentThinking = pi.getThinkingLevel();
+		if (current) {
+			return {
+				entries: [toEntry(current, currentThinking)],
+				fallbackHint: buildSetupHint(catalog),
+			};
+		}
+		return { entries: [], fallbackHint: buildSetupHint(catalog) };
 	}
 
+	const matched = matchCatalogToRegistry(catalog, availableModels);
 	const resolved: FavouriteModelEntry[] = [];
 	const seen = new Set<string>();
 
-	const pushModel = (model: Model<any>, thinking?: ThinkingLevel, nickname?: string) => {
-		const key = `${model.provider}/${model.id}:${thinking ?? ""}`.toLowerCase();
-		if (seen.has(key)) return;
+	for (const entry of matched) {
+		if (!entry.matched) continue;
+		const key = `${entry.provider}/${entry.model}:${entry.thinking}`.toLowerCase();
+		if (seen.has(key)) continue;
 		seen.add(key);
-		resolved.push(toEntry(model, thinking, nickname));
-	};
-
-	for (const rawPattern of patterns) {
-		const nickname = nicknames[rawPattern];
-		const exactFullMatch = findExactModelReferenceMatch(rawPattern, availableModels);
-		if (exactFullMatch) {
-			pushModel(exactFullMatch, undefined, nickname);
-			continue;
-		}
-
-		let pattern = rawPattern;
-		let thinking: ThinkingLevel | undefined;
-		const colonIndex = rawPattern.lastIndexOf(":");
-		if (colonIndex !== -1) {
-			const maybeThinking = rawPattern.substring(colonIndex + 1);
-			if (isThinkingLevel(maybeThinking)) {
-				thinking = maybeThinking;
-				pattern = rawPattern.substring(0, colonIndex);
-			}
-		}
-
-		const exactMatch = findExactModelReferenceMatch(pattern, availableModels);
-		if (exactMatch) {
-			pushModel(exactMatch, thinking, nickname);
-			continue;
-		}
-
-		const matcher = globToRegExp(pattern);
-		const matchingModels = availableModels.filter((model) => {
-			const fullId = `${model.provider}/${model.id}`;
-			return matcher.test(fullId) || matcher.test(model.id);
-		});
-
-		for (const model of matchingModels) {
-			pushModel(model, thinking, nickname);
-		}
+		resolved.push(toEntry(entry.matched, entry.thinking, entry.nickname));
 	}
 
-	return resolved;
+	return { entries: resolved };
 }
 
 interface PickerResult {
@@ -237,9 +150,9 @@ interface PickerResult {
 export async function runFavouriteModels(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
 	if (!ctx.hasUI) return;
 
-	const favourites = loadScopedModels(ctx);
+	const { entries: favourites, fallbackHint } = loadScopedModels(pi, ctx);
 	if (favourites.length === 0) {
-		ctx.ui.notify("No scoped models available. Use /scoped-models or configure API keys", "warning");
+		ctx.ui.notify(fallbackHint ?? "No scoped models available. Use /scoped-models or configure API keys", "warning");
 		return;
 	}
 
