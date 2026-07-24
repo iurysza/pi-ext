@@ -5,9 +5,9 @@
  * order. If no sidecar exists, shows only the current model with a hint.
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import { matchesKey, parseKey, Key } from "@mariozechner/pi-tui";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { matchesKey, parseKey, Key } from "@earendil-works/pi-tui";
 import { OverlayFrame } from "../shared/overlay.js";
 import { ALL_THINKING_LEVELS } from "./model-switcher.js";
 import { THINKING_ROLES } from "../shared/thinking-colors.js";

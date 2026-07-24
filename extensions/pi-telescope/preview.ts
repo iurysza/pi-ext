@@ -7,8 +7,8 @@
 
 import { readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
-import { highlightCode, getLanguageFromPath } from "@mariozechner/pi-coding-agent";
-import type { Theme } from "@mariozechner/pi-coding-agent";
+import { highlightCode, getLanguageFromPath } from "@earendil-works/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 // Note: highlightCode(code, lang?) returns string[] (lines), no theme param needed
 
 /** Read a file and return preview lines with optional syntax highlighting. */

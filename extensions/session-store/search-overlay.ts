@@ -12,10 +12,10 @@
  * ╰─────────────────────────────┴───────────────────────────────╯
  */
 
-import type { Component, Focusable } from "@mariozechner/pi-tui";
-import { Input, Markdown, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import type { Theme } from "@mariozechner/pi-coding-agent";
-import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
+import type { Component, Focusable } from "@earendil-works/pi-tui";
+import { Input, Markdown, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import type { SessionRecord, SearchResult } from "./db.js";
 import { readFileSync } from "node:fs";
 

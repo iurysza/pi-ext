@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildSemReviewGuidance, getSemToolAvailability } from "./sem-guidance.mjs";
+import { buildSemReviewGuidance, getSemToolAvailability } from "../../extensions/review/sem-guidance.mjs";
 
 test("getSemToolAvailability detects active sem review tools", () => {
 	const availability = getSemToolAvailability(["read", "sem_context", "sem_impact"]);

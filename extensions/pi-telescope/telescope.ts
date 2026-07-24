@@ -14,13 +14,13 @@
  *   - Footer with keybinding hints
  */
 
-import type { ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import {
 	matchesKey,
 	Key,
 	visibleWidth,
 	truncateToWidth,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import type { TelescopeProvider, ScoredItem, TelescopeOptions } from "./types.js";
 import { filterAndScore } from "./scoring.js";
 import { filePreview } from "./preview.js";

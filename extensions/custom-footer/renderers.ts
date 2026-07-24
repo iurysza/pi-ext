@@ -6,7 +6,7 @@
  */
 
 import type { PermissionMode } from "../permissions/permissions.js";
-import { visibleWidth } from "@mariozechner/pi-tui";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { THINKING_ROLES } from "../shared/thinking-colors.js";
 
 type ThemeFg = { fg: (role: any, text: string) => string; bold: (text: string) => string; inverse: (text: string) => string };

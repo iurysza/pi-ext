@@ -6,7 +6,7 @@
  * Uses v1 raw text commands over the socket (v2 doesn't expose set_status yet).
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { CmuxClient } from "./cmux-client.js";
 
 const STATUS_KEYS = ["pi_state"] as const;

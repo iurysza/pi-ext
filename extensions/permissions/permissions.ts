@@ -20,7 +20,7 @@
  */
 
 import { resolve } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 import type { BashRule, PermissionMode } from "./types.js";
 import { ALL_MODES, MODE_DESCRIPTIONS } from "./types.js";

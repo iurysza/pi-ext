@@ -12,7 +12,7 @@ import type {
 	ExtensionContext,
 	ExtensionCommandContext,
 	SessionManager,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 type SessionTreeNode = ReturnType<SessionManager["getTree"]>[number];
 
@@ -95,9 +95,9 @@ export function collectLabeledEntries(tree: SessionTreeNode[]): LabeledEntry[] {
 				let preview = "";
 				if (node.entry.type === "message") {
 					const msg = node.entry.message;
-					if (typeof msg.content === "string") {
+					if ("content" in msg && typeof msg.content === "string") {
 						preview = msg.content.slice(0, 60);
-					} else if (Array.isArray(msg.content)) {
+					} else if ("content" in msg && Array.isArray(msg.content)) {
 						const text = msg.content.find((c: any) => c.type === "text");
 						if (text && "text" in text) preview = (text as any).text.slice(0, 60);
 					}

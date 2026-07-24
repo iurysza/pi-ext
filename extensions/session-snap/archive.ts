@@ -3,8 +3,8 @@ import { readFileSync, unlinkSync } from "node:fs";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { type ArchivedSession, CONFIG } from "./types.js";
-import { type SessionMetrics, extractFullText } from "./scanner.js";
+import { type ArchivedSession, type SessionMetrics, CONFIG } from "./types.js";
+import { extractFullText } from "./scanner.js";
 
 let _db: any | null = null;
 

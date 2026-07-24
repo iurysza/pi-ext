@@ -9,10 +9,10 @@
  * Exported for use by the leader-key extension.
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import type { ThinkingLevel } from "@mariozechner/pi-agent-core";
-import { SettingsManager } from "@mariozechner/pi-coding-agent";
-import { fuzzyFilter, Key, matchesKey } from "@mariozechner/pi-tui";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import { SettingsManager } from "@earendil-works/pi-coding-agent";
+import { fuzzyFilter, Key, matchesKey } from "@earendil-works/pi-tui";
 import { OverlayFrame } from "../shared/overlay.js";
 
 export const ALL_THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
@@ -30,8 +30,8 @@ interface ProviderInfo {
  * Get the set of enabled model identifiers from settings.
  * Returns undefined when there is no filter (all models are enabled).
  */
-function getEnabledModelSet(): Set<string> | undefined {
-	const sm = SettingsManager.create();
+function getEnabledModelSet(cwd: string): Set<string> | undefined {
+	const sm = SettingsManager.create(cwd);
 	const patterns = sm.getEnabledModels();
 	if (!patterns || patterns.length === 0) return undefined;
 	// enabledModels entries are "provider/modelId" exact strings (or globs, but
@@ -61,7 +61,7 @@ function isModelEnabled(provider: string, modelId: string, enabled: Set<string> 
 }
 
 function getAvailableEnabledModels(ctx: ExtensionContext) {
-	const enabled = getEnabledModelSet();
+	const enabled = getEnabledModelSet(ctx.cwd);
 	return ctx.modelRegistry
 		.getAvailable()
 		.filter((m) => isModelEnabled(m.provider, m.id, enabled));

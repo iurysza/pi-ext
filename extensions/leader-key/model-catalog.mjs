@@ -3,8 +3,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 /**
- * @typedef {import("@mariozechner/pi-agent-core").ThinkingLevel} ThinkingLevel
- * @typedef {import("@mariozechner/pi-ai").Model<any>} Model
+ * @typedef {import("@earendil-works/pi-agent-core").ThinkingLevel} ThinkingLevel
+ * @typedef {import("@earendil-works/pi-ai").Model<any>} Model
  */
 
 /**

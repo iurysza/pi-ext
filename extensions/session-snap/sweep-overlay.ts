@@ -19,8 +19,8 @@
  * └─────────────────────────────────────────────────────────┘
  */
 
-import type { Component, Focusable } from "@mariozechner/pi-tui";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import type { Component, Focusable } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { ClassifiedSession, SessionCategory } from "./types.js";
 import { formatBytes, formatDuration, projectName } from "./scanner.js";
 

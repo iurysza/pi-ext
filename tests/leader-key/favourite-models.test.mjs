@@ -10,7 +10,7 @@ import {
   catalogPath,
   loadModelCatalog,
   matchCatalogToRegistry,
-} from "./model-catalog.mjs";
+} from "../../extensions/leader-key/model-catalog.mjs";
 
 function makeModel(provider, id, name) {
   return { provider, id, name };

@@ -10,7 +10,7 @@
  *      tab title is user-facing and shared, we only drive it when asked.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ScClient } from "./sc-client.js";
 
 const STATUS_KEY = "superconductor";

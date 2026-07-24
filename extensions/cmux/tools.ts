@@ -6,10 +6,10 @@
  * - cmux_notify: Send a notification to the user via cmux
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { truncateTail } from "@mariozechner/pi-coding-agent";
-import { StringEnum } from "@mariozechner/pi-ai";
-import { Type } from "@sinclair/typebox";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { truncateTail } from "@earendil-works/pi-coding-agent";
+import { StringEnum } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { CmuxClient } from "./cmux-client.js";
 
 /** ToolResult shape expected by pi's agent core. */

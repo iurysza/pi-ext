@@ -8,10 +8,10 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { Theme } from "@mariozechner/pi-coding-agent";
-import { parseSessionEntries, getMarkdownTheme } from "@mariozechner/pi-coding-agent";
-import type { SessionEntry } from "@mariozechner/pi-coding-agent";
-import { Markdown, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import { parseSessionEntries, getMarkdownTheme } from "@earendil-works/pi-coding-agent";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { Markdown, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { TelescopeProvider } from "../types.js";
 import { copyToClipboard } from "../clipboard.js";
 import {
@@ -249,7 +249,7 @@ function buildRichPreview(session: SessionInfo, theme: Theme, maxLines: number):
 
 	let mdTheme: any;
 	try {
-		mdTheme = getMarkdownTheme(th);
+		mdTheme = getMarkdownTheme();
 	} catch {
 		mdTheme = undefined;
 	}

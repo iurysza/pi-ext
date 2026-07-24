@@ -12,7 +12,7 @@
  * Gracefully degrades: if not running inside Superconductor, it is a no-op.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { ScClient } from "./sc-client.js";
 import { wireStatus } from "./status.js";
 import { wireTools } from "./tools.js";

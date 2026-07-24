@@ -8,7 +8,7 @@
  * Gracefully degrades: if not running inside cmux, the extension is a silent no-op.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { CmuxClient } from "./cmux-client.js";
 import { wireNotifications } from "./notifications.js";
 import { wireStatus } from "./status.js";
