@@ -7,9 +7,9 @@
  * Rendered as a belowEditor widget while the default footer is suppressed.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { PermissionMode } from "../permissions/permissions.js";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { execSync } from "node:child_process";
 import { existsSync, watch, type FSWatcher } from "node:fs";
 import { join } from "node:path";

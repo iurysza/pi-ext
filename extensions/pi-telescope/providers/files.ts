@@ -7,7 +7,7 @@
 
 import { execSync } from "node:child_process";
 import { resolve } from "node:path";
-import type { Theme } from "@mariozechner/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { TelescopeProvider } from "../types.js";
 import { copyToClipboard } from "../clipboard.js";
 

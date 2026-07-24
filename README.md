@@ -17,7 +17,7 @@ https://github.com/user-attachments/assets/d1e5f848-176f-43cb-85bb-3d518e5b0bdd
 
 A collection of extensions, skills, and themes for [Pi](https://github.com/badlogic/pi), the AI coding agent for the terminal.
 
-Extensions cover everything from UI polish (custom footer, tool pills, leader-key palette) to deep workflow tooling (semantic git review, session archiving, context handoff between sessions, cmux integration). Everything is MIT licensed and designed to be installed together or individually.
+Extensions cover everything from UI polish (custom footer, tool pills, leader-key palette) to deep workflow tooling (semantic git review, session archiving, context handoff between sessions, cmux integration). The package is MIT licensed; derived components retain their original notices in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 This fork tracks [tomsej/pi-ext](https://github.com/tomsej/pi-ext) and adds:
 
@@ -193,4 +193,4 @@ Most extensions work out of the box. Notable config:
 
 ## License
 
-[MIT](LICENSE) © tomsej
+[MIT](LICENSE) © 2025 tomsej, © 2026 Iury Souza. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for component attribution.

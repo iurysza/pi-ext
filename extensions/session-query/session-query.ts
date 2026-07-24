@@ -17,16 +17,17 @@
  * the model can use this tool to look up details from that session.
  */
 
-import { complete, type Message } from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { Message } from "@earendil-works/pi-ai";
+import { complete } from "@earendil-works/pi-ai/compat";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	SessionManager,
 	convertToLlm,
 	getMarkdownTheme,
 	serializeConversation,
 	type SessionEntry,
-} from "@mariozechner/pi-coding-agent";
-import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { normalize } from "@sting8k/pi-vcc/src/core/normalize";
 import { filterNoise } from "@sting8k/pi-vcc/src/core/filter-noise";
@@ -116,7 +117,7 @@ export default function (pi: ExtensionAPI) {
 		},
 		parameters: Type.Object({
 			sessionPath: Type.String({
-				description: "Full path to the session file (e.g., /home/user/.pi/agent/sessions/.../session.jsonl)",
+				description: "Full path to the session file (e.g., ~/.pi/agent/sessions/.../session.jsonl)",
 			}),
 			question: Type.String({
 				description: "What you want to know about that session (e.g., 'What files were modified?' or 'What approach was chosen?')",
@@ -197,7 +198,7 @@ export default function (pi: ExtensionAPI) {
 
 			try {
 				const auth = await ctx.modelRegistry.getApiKeyAndHeaders(queryModel);
-				if (!auth.ok) {
+				if (auth.ok === false) {
 					return errorResult(`Error querying session: ${auth.error}`);
 				}
 

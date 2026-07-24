@@ -25,9 +25,9 @@
  *   files, git-branches, git-log, sessions, skills, commands
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { CustomEditor } from "@mariozechner/pi-coding-agent";
-import type { AutocompleteItem, AutocompleteProvider } from "@mariozechner/pi-tui";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { CustomEditor } from "@earendil-works/pi-coding-agent";
+import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
 import type { TelescopeProvider } from "./types.js";
 import { openTelescope } from "./telescope.js";
 import { filterAndScore } from "./scoring.js";

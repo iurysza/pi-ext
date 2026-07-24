@@ -10,7 +10,7 @@ import {
 	parseSemJsonOutput,
 	pickImpactTargets,
 	summarizeSemDiffPayload,
-} from "./core.mjs";
+} from "../../extensions/pi-sem/core.mjs";
 
 test("buildSemDiffArgs builds a range diff with extension filters", () => {
 	const args = buildSemDiffArgs({ from: "origin/main", to: "HEAD", fileExts: ["ts", ".md"] });

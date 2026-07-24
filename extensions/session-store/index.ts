@@ -10,8 +10,9 @@
  */
 
 import { statSync } from "node:fs";
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Container, Markdown, Text, getMarkdownTheme } from "@mariozechner/pi-tui";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
+import { Container, Markdown, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
   indexSession,
@@ -145,7 +146,7 @@ export default function (pi: ExtensionAPI) {
           return new SearchOverlay({
             theme,
             getTermRows: () => tui.terminal?.rows ?? 40,
-            getTermCols: () => tui.terminal?.cols ?? 120,
+            getTermCols: () => tui.terminal?.columns ?? 120,
             requestRender: () => tui.requestRender(),
             onDone: done,
             onSearch: (query) => searchSessions(query, 20),
@@ -164,7 +165,7 @@ export default function (pi: ExtensionAPI) {
 
       if (action.type === "select") {
         // Print the selected session path so user can reference it
-        ctx.log(`Selected session: ${action.path}`);
+        ctx.ui.notify(`Selected session: ${action.path}`, "info");
       }
     },
   });

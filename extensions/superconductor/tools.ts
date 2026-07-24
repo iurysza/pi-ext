@@ -7,10 +7,10 @@
  * The tool surfaces `sc` cli_error envelopes verbatim so the model can react.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { truncateTail } from "@mariozechner/pi-coding-agent";
-import { StringEnum } from "@mariozechner/pi-ai";
-import { Type } from "@sinclair/typebox";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { truncateTail } from "@earendil-works/pi-coding-agent";
+import { StringEnum } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import type { ScClient, ScResult } from "./sc-client.js";
 import { createWorktree, listWorktrees, rootRepo } from "./git.js";
 

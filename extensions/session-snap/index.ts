@@ -6,7 +6,7 @@
  *   /archive  — Browse archived sessions, search, restore, delete
  */
 
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { scanAllSessions, formatBytes } from "./scanner.js";
 import { archiveSession, deleteSession, listArchived, restoreSession, deleteArchived, getArchivedCount, closeDb } from "./archive.js";
 import { SweepOverlay, type SweepResult } from "./sweep-overlay.js";
@@ -154,7 +154,7 @@ export default function (pi: ExtensionAPI) {
               sessions: initialSessions,
               theme,
               getTermRows: () => tui.terminal?.rows ?? 40,
-              getTermCols: () => tui.terminal?.cols ?? 120,
+              getTermCols: () => tui.terminal?.columns ?? 120,
               requestRender: () => tui.requestRender(),
               onDone: done,
               onSearch: (query) => listArchived(query || undefined),

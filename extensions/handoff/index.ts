@@ -16,10 +16,10 @@
  *   /handoff --tab continue in a new tab/window
  */
 
-import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@mariozechner/pi-coding-agent";
-import { convertToLlm } from "@mariozechner/pi-coding-agent";
-import { matchesKey, Key } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import { convertToLlm } from "@earendil-works/pi-coding-agent";
+import { matchesKey, Key } from "@earendil-works/pi-tui";
+import { Type } from "typebox";
 import { existsSync, readFileSync, mkdirSync, writeFileSync, unlinkSync } from "node:fs";
 import * as path from "node:path";
 import { join, dirname, resolve } from "node:path";
@@ -369,9 +369,11 @@ function detectLanguage(ctx: ExtensionContext): { language: string; sample: stri
 
 	const recentTexts = userMessages
 		.slice(-5)
-		.flatMap((m) => m.content)
-		.filter((c): c is { type: "text"; text: string } => c.type === "text")
-		.map((c) => c.text)
+		.flatMap((m) =>
+			typeof m.content === "string"
+				? [m.content]
+				: m.content.map((content) => content.type === "text" ? content.text : ""),
+		)
 		.join(" ");
 
 	if (!recentTexts.trim()) return null;

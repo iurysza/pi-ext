@@ -12,11 +12,11 @@
  * ╰─────────────────────────────┴───────────────────────────────╯
  */
 
-import type { Component, Focusable } from "@mariozechner/pi-tui";
-import { Input, Markdown, truncateToWidth, visibleWidth, CURSOR_MARKER } from "@mariozechner/pi-tui";
-import { matchesKey } from "@mariozechner/pi-tui";
-import type { Theme } from "@mariozechner/pi-coding-agent";
-import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
+import type { Component, Focusable } from "@earendil-works/pi-tui";
+import { Input, Markdown, truncateToWidth, visibleWidth, CURSOR_MARKER } from "@earendil-works/pi-tui";
+import { matchesKey } from "@earendil-works/pi-tui";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme } from "@earendil-works/pi-coding-agent";
 import type { ArchivedSession } from "./types.js";
 import { type MessageBlock, getArchivedMessageBlocks } from "./archive.js";
 import { formatBytes, formatDuration, projectName } from "./scanner.js";

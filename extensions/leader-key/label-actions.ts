@@ -6,7 +6,7 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 	SessionManager,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 
 type SessionTreeNode = ReturnType<SessionManager["getTree"]>[number];
 import type { TopLevelEntry } from "./types.js";

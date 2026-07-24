@@ -8,9 +8,9 @@
  * notification methods can be silently suppressed for focused surfaces.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import type { AssistantMessage, Message, TextContent } from "@mariozechner/pi-ai";
-import { isBashToolResult } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { AssistantMessage, Message, TextContent } from "@earendil-works/pi-ai";
+import { isBashToolResult } from "@earendil-works/pi-coding-agent";
 import { execFile } from "node:child_process";
 import type { CmuxClient } from "./cmux-client.js";
 
